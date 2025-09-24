@@ -1,0 +1,122 @@
+@import "tailwindcss";
+
+:root {
+  --background: #ffffff;
+  --foreground: #171717;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #0a0a0a;
+    --foreground: #ededed;
+  }
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: Arial, Helvetica, sans-serif;
+}
+
+/* Chat UI – WhatsApp-like bubbles */
+.cs-message-list {
+  padding: 16px !important;
+}
+
+.cs-message__content {
+  border-radius: 14px !important;
+  padding: 8px 12px !important;
+  box-shadow: 0 1px 1px rgba(0,0,0,0.06) !important;
+  max-width: 95% !important;
+  font-size: 14px !important;
+  line-height: 1.35 !important;
+  position: relative !important;
+}
+
+/* Full-width for interactive blocks inside messages on mobile */
+.custom-block > * {
+  display: block;
+  width: 100%;
+}
+@media (min-width: 640px) {
+  .custom-block > * {
+    width: auto;
+  }
+}
+
+/* Incoming (left) */
+.cs-message--incoming .cs-message__content {
+  background: #ffffff !important;
+  color: #111827 !important; /* neutral-900 */
+}
+
+/* Outgoing (right) */
+.cs-message--outgoing .cs-message__content {
+  background: #dcf8c6 !important; /* WhatsApp green bubble */
+  color: #111827 !important;
+}
+
+/* Bubble tails */
+.cs-message--incoming .cs-message__content::before {
+  content: "";
+  position: absolute;
+  left: -6px;
+  top: 8px;
+  width: 0;
+  height: 0;
+  border-top: 6px solid transparent;
+  border-right: 6px solid #ffffff;
+  border-bottom: 6px solid transparent;
+}
+.cs-message--outgoing .cs-message__content::after {
+  content: "";
+  position: absolute;
+  right: -6px;
+  top: 8px;
+  width: 0;
+  height: 0;
+  border-top: 6px solid transparent;
+  border-left: 6px solid #dcf8c6;
+  border-bottom: 6px solid transparent;
+}
+
+/* Dark mode adjustments */
+@media (prefers-color-scheme: dark) {
+  .cs-message--incoming .cs-message__content {
+    background: #1f2937 !important; /* neutral-800 */
+    color: #e5e7eb !important; /* neutral-200 */
+  }
+  .cs-message--outgoing .cs-message__content {
+    background: #0b4f3a !important; /* deep green-ish for dark */
+    color: #e5e7eb !important;
+  }
+  .cs-message--incoming .cs-message__content::before {
+    border-right-color: #1f2937;
+  }
+  .cs-message--outgoing .cs-message__content::after {
+    border-left-color: #0b4f3a;
+  }
+}
+
+/* Remove borders, polish header/input */
+.cs-conversation-header,
+.cs-message-input {
+  border: none !important;
+}
+.cs-conversation-header__content {
+  font-weight: 600 !important;
+}
+.cs-message-input__content-editor-wrapper {
+  border-radius: 12px !important;
+  border: 1px solid rgba(0,0,0,0.08) !important;
+}
+.cs-message-input__content-editor[data-placeholder]:empty::before {
+  opacity: .7 !important;
+}
