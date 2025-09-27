@@ -8,7 +8,7 @@ export default async function SuccessPage({ searchParams }: { searchParams: Prom
     <div className="min-h-screen w-full flex items-center justify-center p-6">
       <div className="w-full max-w-md border rounded-xl p-6 text-center">
         <h1 className="text-2xl font-semibold mb-2">¡Pago exitoso!</h1>
-        <p className="text-neutral-600 mb-4">Gracias por reservar tu consulta. Enviaremos la invitación al correo provisto.</p>
+        <p className="text-neutral-600 mb-4">Gracias por reservar tu consulta. Hemos enviado la invitación con el enlace de Google Meet al correo provisto.</p>
         {sessionId ? (
           <p className="text-xs text-neutral-500 mb-6">ID de sesión: {sessionId}</p>
         ) : null}

@@ -2,10 +2,11 @@
 
 import { create } from "zustand";
 import { FormMessage } from "./FormMessage";
-import { CalendarMessage } from "./CalendarMessage";
-import { TimeSlotsMessage } from "./TimeSlotsMessage";
+import { CustomCalendarMessage } from "./CustomCalendarMessage";
+import { CustomTimeSlotsMessage } from "./CustomTimeSlotsMessage";
+import { DurationMessage } from "./DurationMessage";
 
-export type VisaType = "estudio" | "nomada" | "trabajo" | null;
+export type VisaType = "estudio" | "nomada" | "trabajo" | "general" | null;
 
 export type ChatMessage = {
   id: string;
@@ -20,39 +21,26 @@ type ChatState = {
   isBootstrapped: boolean;
   isBotTyping: boolean;
   selectedVisa: VisaType;
-  mode: "idle" | "asking" | "calendar" | "times" | "form";
+  mode: "idle" | "asking" | "duration" | "calendar" | "times" | "form";
+  questionCount: number;
+  adminConfig: { aiContext: string; maxQuestions: number } | null;
+  selectedDuration: number | null;
+  selectedPrice: number;
+  selectedDate: string | null;
+  selectedTime: string | null;
   ensureBootstrapped: () => void;
   sendUserMessage: (text: string) => void;
   selectVisa: (visa: Exclude<VisaType, null>) => void;
-  selectDate: (dateISO: string) => void;
-  selectTime: (time: string) => void;
+  selectGeneralConsultation: () => void;
+  selectDuration: (duration: number, price: number) => void;
+  selectDateAndTime: (dateISO: string, time: string) => void;
+  backToCalendar: () => void;
   getConversationSummary: () => string;
   getAISummary: () => Promise<string>;
+  loadAdminConfig: () => Promise<void>;
+  determineVisaAutomatically: () => Promise<void>;
+  determineVisaFromFirstMessage: (text: string) => Promise<void>;
 };
-
-const VISA_OPTIONS = [
-  { key: "trabajo", label: "Visa de Trabajo" },
-  { key: "estudio", label: "Visa de Estudio" },
-  { key: "nomada", label: "Nómada Digital" },
-  { key: "unknown", label: "No lo sé" },
-] as const;
-
-function buildOptionsBlock(onClick: (k: string) => void): React.ReactNode {
-  return (
-    <div className="flex flex-wrap gap-2">
-      {VISA_OPTIONS.map((opt) => (
-        <button
-          key={opt.key}
-          onClick={() => onClick(opt.key)}
-          type="button"
-          className="px-3 py-2 rounded-lg border border-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-800 cursor-pointer"
-        >
-          {opt.label}
-        </button>
-      ))}
-    </div>
-  );
-}
 
 export const useChatStore = create<ChatState>((set, get) => ({
   messages: [],
@@ -60,160 +48,285 @@ export const useChatStore = create<ChatState>((set, get) => ({
   isBotTyping: false,
   selectedVisa: null,
   mode: "idle",
+  questionCount: 0,
+  adminConfig: null,
+  selectedDuration: null,
+  selectedPrice: 25,
+  selectedDate: null,
+  selectedTime: null,
 
   ensureBootstrapped: () => {
     if (get().isBootstrapped) return;
-    // All messages originate from AI responses. Start by asking via AI what opción elegir.
     set({ isBootstrapped: true, mode: "asking" });
     (async () => {
-      const first: ChatMessage = { id: `ai-welcome-${Date.now()}`, role: "bot", text: "Hola, ¿tu objetivo principal es estudiar, trabajar remotamente o empleo en España?", createdAt: Date.now() };
+      // Cargar configuración de admin
+      await get().loadAdminConfig();
+      
+      // Mensaje inicial fijo - siempre el mismo
+      const initialMessage = "¡Hola! 👋 Soy tu asistente especializado en visas para España. ¿Cuál es tu propósito en España?";
+      
+      const first: ChatMessage = { 
+        id: `ai-welcome-${Date.now()}`, 
+        role: "bot", 
+        text: initialMessage, 
+        createdAt: Date.now() 
+      };
       set((s) => ({ messages: [...s.messages, first] }));
     })();
   },
 
-  sendUserMessage: (text: string) => {
-    const trimmed = text.trim();
-    if (!trimmed) return;
-    // Client-side guard: refuse off-topic quickly
-    const offTopic = /\b(refund|crypto|love|poem|song|joke|linux|windows key|serial|vpn|movie|recipe)\b/i.test(trimmed);
-    if (offTopic) {
-      const warn: ChatMessage = { id: `warn-${Date.now()}`, role: "bot", text: "Solo puedo ayudarte con visas de España: ¿estudiar, trabajar remotamente o empleo?", createdAt: Date.now() };
-      set((s) => ({ messages: [...s.messages, { id: `u-${Date.now()}`, role: "user", text: trimmed, createdAt: Date.now() }, warn ] }));
-      return;
-    }
-    const userMsg: ChatMessage = { id: `u-${Date.now()}`, role: "user", text: trimmed, createdAt: Date.now() };
-    set((s) => ({ messages: [...s.messages, userMsg] }));
+  sendUserMessage: async (text: string) => {
+    const userMsg: ChatMessage = { id: `user-${Date.now()}`, role: "user", text, createdAt: Date.now() };
+    set((s) => ({ messages: [...s.messages, userMsg], isBotTyping: true }));
 
-    const { mode } = get();
-    if (mode === "asking") {
-      // Simple rule-based routing
-      const lower = trimmed.toLowerCase();
-      if (lower.includes("estudi")) {
-        get().selectVisa("estudio");
-      } else if (lower.includes("tele") || lower.includes("remot") || lower.includes("nómada") || lower.includes("nomada")) {
-        get().selectVisa("nomada");
-      } else if (lower.includes("emple") || lower.includes("trabaj")) {
-        get().selectVisa("trabajo");
-      } else {
-        // Try Ollama local endpoint first
-        (async () => {
-          try {
-            set({ isBotTyping: true });
-            const history = get().messages.map((m) => ({ role: m.role === "bot" ? "assistant" as const : "user" as const, content: m.text }));
-            const res = await fetch("/api/chat", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ history }),
-            });
-            if (res.ok) {
-              const d = await res.json();
-              const txt: string = d.response || "";
-              // naive parse
-              if (txt.includes("\"visa\"")) {
-                if (/estudio/.test(txt)) return get().selectVisa("estudio");
-                if (/nomada|nómada/.test(txt)) return get().selectVisa("nomada");
-                if (/trabajo|empleo/.test(txt)) return get().selectVisa("trabajo");
-              }
-              const questionMatch = txt.match(/\"pregunta\"\s*:\s*\"([^\"]+)/);
-              const reply = questionMatch?.[1] || txt.trim() || "¿Puedes contarme el propósito principal del viaje?";
-              const follow: ChatMessage = { id: `ask-ollama-${Date.now()}`, role: "bot", text: reply, createdAt: Date.now() };
-              set((s) => ({ messages: [...s.messages, follow], isBotTyping: false }));
-              return;
-            }
-          } catch {}
-          // Fallback static follow-up
-          const followUp: ChatMessage = {
-            id: `ask-2`,
-            role: "bot",
-            text: "Entiendo. ¿Tu plan principal es estudiar, trabajar por cuenta propia/remoto, o trabajar para una empresa en España?",
-            createdAt: Date.now(),
-          };
-          set((s) => ({ messages: [...s.messages, followUp], isBotTyping: false }));
-        })();
-      }
+    try {
+      // Determinar visa inmediatamente con el primer mensaje
+      await get().determineVisaFromFirstMessage(text);
+    } catch (error) {
+      console.error("Error determining visa:", error);
+      const errorMsg: ChatMessage = { 
+        id: `error-${Date.now()}`, 
+        role: "bot", 
+        text: "Lo siento, hubo un error. Por favor, intenta de nuevo.", 
+        createdAt: Date.now() 
+      };
+      set((s) => ({ messages: [...s.messages, errorMsg] }));
+    } finally {
+      set({ isBotTyping: false });
     }
   },
 
   selectVisa: (visa) => {
-    set({ selectedVisa: visa, mode: "calendar" });
+    set({ selectedVisa: visa, mode: "duration" });
+    const visaNames = {
+      estudio: "Visa de Estudiante",
+      nomada: "Visa Nómada Digital", 
+      trabajo: "Visa de Trabajo",
+      general: "Consulta General"
+    };
     const confirmation: ChatMessage = {
       id: `visa-${visa}`,
       role: "bot",
-      text: `Perfecto. Elige una fecha para tu consulta (${visa}).`,
+      text: `✅ Perfecto. He identificado que necesitas una **${visaNames[visa]}**. Ahora elige la duración de tu consulta:`,
+      createdAt: Date.now(),
+    };
+    const durationMsg: ChatMessage = {
+      id: `duration-${Date.now()}`,
+      role: "bot",
+      text: "",
+      render: <DurationMessage onSelect={(duration, price) => get().selectDuration(duration, price)} />,
+      createdAt: Date.now(),
+    };
+    set((s) => ({ messages: [...s.messages, confirmation, durationMsg] }));
+  },
+
+  selectGeneralConsultation: () => {
+    set({ selectedVisa: "general", mode: "duration" });
+    const confirmation: ChatMessage = {
+      id: `general-consultation`,
+      role: "bot",
+      text: `🤔 Entiendo. Te ayudo con una **consulta general** para determinar el mejor tipo de visa para tu situación. Elige la duración de tu consulta:`,
+      createdAt: Date.now(),
+    };
+    const durationMsg: ChatMessage = {
+      id: `duration-${Date.now()}`,
+      role: "bot",
+      text: "",
+      render: <DurationMessage onSelect={(duration, price) => get().selectDuration(duration, price)} />,
+      createdAt: Date.now(),
+    };
+    set((s) => ({ messages: [...s.messages, confirmation, durationMsg] }));
+  },
+
+  selectDuration: (duration, price) => {
+    set({ selectedDuration: duration, selectedPrice: price, mode: "calendar" });
+    const confirmation: ChatMessage = {
+      id: `duration-${duration}`,
+      role: "bot",
+      text: `Excelente. Consulta de ${duration} minutos por €${price}. Ahora elige una fecha:`,
       createdAt: Date.now(),
     };
     const calendarMsg: ChatMessage = {
       id: `cal-${Date.now()}`,
       role: "bot",
       text: "",
-      render: <CalendarMessage onSelect={(d) => get().selectDate(d)} />,
+      render: <CustomTimeSlotsMessage onPick={(d, t) => get().selectDateAndTime(d, t)} />,
       createdAt: Date.now(),
     };
     set((s) => ({ messages: [...s.messages, confirmation, calendarMsg] }));
   },
 
-  selectDate: (dateISO: string) => {
-    set({ mode: "times" });
-    const askTime: ChatMessage = {
-      id: `t-ask-${Date.now()}`,
-      role: "bot",
-      text: `Fecha seleccionada: ${dateISO}. Elige un horario disponible:`,
-      createdAt: Date.now(),
-    };
-    const timesMsg: ChatMessage = {
-      id: `t-${Date.now()}`,
-      role: "bot",
-      text: "",
-      render: <TimeSlotsMessage onPick={(time) => get().selectTime(time)} />,
-      createdAt: Date.now(),
-    };
-    set((s) => ({ messages: [...s.messages, askTime, timesMsg] }));
-  },
-
-  selectTime: (time: string) => {
-    set({ mode: "form" });
+  selectDateAndTime: (dateISO: string, time: string) => {
+    set({ mode: "form", selectedDate: dateISO, selectedTime: time });
     const info: ChatMessage = {
-      id: `time-${Date.now()}`,
+      id: `datetime-${Date.now()}`,
       role: "bot",
-      text: `Horario seleccionado: ${time}. Completa el formulario para finalizar.`,
+      text: `Cita seleccionada: ${new Date(dateISO).toLocaleDateString('es-ES')} a las ${time}. Completa el formulario para finalizar.`,
       createdAt: Date.now(),
     };
     const visa = get().selectedVisa as Exclude<VisaType, null>;
+    const { selectedPrice } = get();
     (async () => {
-      const summary = await get().getAISummary().catch(() => get().getConversationSummary());
       const form: ChatMessage = {
         id: `form-${visa}-${Date.now()}`,
         role: "bot",
         text: "",
-        render: <FormMessage visaType={visa} presetComment={summary} />,
+        render: <FormMessage 
+          visaType={visa} 
+          presetComment="" 
+          customPrice={selectedPrice}
+          selectedDate={dateISO}
+          selectedTime={time}
+        />,
         createdAt: Date.now(),
       };
       set((s) => ({ messages: [...s.messages, info, form] }));
     })();
   },
 
+  backToCalendar: () => {
+    set({ mode: "calendar" });
+    // Remover los mensajes de horarios y volver al calendario
+    const currentMessages = get().messages;
+    const calendarMessage = currentMessages.find(m => m.id.startsWith('cal-'));
+    
+    if (calendarMessage) {
+      // Mantener solo los mensajes hasta el calendario
+      const calendarIndex = currentMessages.findIndex(m => m.id.startsWith('cal-'));
+      const messagesUpToCalendar = currentMessages.slice(0, calendarIndex + 1);
+      set({ messages: messagesUpToCalendar });
+    }
+  },
+
+
   getConversationSummary: () => {
     const msgs = get().messages.filter((m) => m.role === "user" || m.role === "bot");
     const lastN = msgs.slice(-10).map((m) => `${m.role === "user" ? "Usuario" : "Bot"}: ${m.text}`).join("\n");
-    return `Resumen de la conversación:\n${lastN}`;
+    return lastN;
   },
 
   getAISummary: async () => {
-    const history = get().messages.map((m) => ({ role: m.role === "bot" ? "assistant" as const : "user" as const, content: m.text }));
-    const prompt = `Genera un RESUMEN breve y útil para un consultor de inmigración sobre la conversación previa. Usa viñetas claras: objetivos del usuario, situación actual, dudas clave, recomendación preliminar. Responde solo texto.`;
+    const summary = get().getConversationSummary();
     try {
-      const res = await fetch("http://localhost:11434/api/generate", {
+      const res = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ model: (process.env.OLLAMA_MODEL as string) || "qwen2.5:0.5b", prompt: `${prompt}\n\nHistorial:\n${history.map(h=>h.role+": "+h.content).join("\n")}`, stream: false }),
+        body: JSON.stringify({ 
+          history: [{ role: "user", content: `Resume esta conversación en 2-3 líneas para el formulario: ${summary}` }],
+          adminContext: get().adminConfig?.aiContext 
+        }),
       });
-      if (!res.ok) throw new Error("ollama not available");
       const data = await res.json();
-      return String(data.response || "").trim().slice(0, 1200);
+      return data.response || summary;
     } catch {
-      return get().getConversationSummary();
+      return summary;
+    }
+  },
+
+  loadAdminConfig: async () => {
+    try {
+      const res = await fetch("/api/admin/config");
+      if (res.ok) {
+        const config = await res.json();
+        set({ adminConfig: config });
+      }
+    } catch (error) {
+      console.error("Error loading admin config:", error);
+    }
+  },
+
+  determineVisaFromFirstMessage: async (text: string) => {
+    try {
+      // Primero verificar si es una respuesta de "no lo sé" o similar
+      const lowerText = text.toLowerCase();
+      const uncertainResponses = [
+        "no lo sé", "no se", "no sé", "no lo se", "no se que", "no sé qué",
+        "no estoy seguro", "no estoy segura", "no estoy segur", "no estoy segur",
+        "no tengo claro", "no tengo idea", "no tengo ni idea",
+        "no sé qué elegir", "no se que elegir", "no sé cuál", "no se cual",
+        "ayuda", "help", "no entiendo", "no entiendo bien"
+      ];
+      
+      const isUncertain = uncertainResponses.some(response => lowerText.includes(response));
+      
+      if (isUncertain) {
+        get().selectGeneralConsultation();
+        return;
+      }
+
+      const res = await fetch("/api/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ 
+          history: [{ role: "user", content: text }],
+          adminContext: get().adminConfig?.aiContext 
+        }),
+      });
+      const data = await res.json();
+      const response = data.response;
+      
+      try {
+        const parsed = JSON.parse(response);
+        if (parsed.visa) {
+          const visa = parsed.visa as "estudio" | "nomada" | "trabajo";
+          get().selectVisa(visa);
+        } else {
+          // Si no se puede determinar, usar visa por defecto basada en palabras clave
+          if (lowerText.includes("estudiar") || lowerText.includes("estudio") || lowerText.includes("universidad")) {
+            get().selectVisa("estudio");
+          } else if (lowerText.includes("trabajar") || lowerText.includes("trabajo") || lowerText.includes("empleo")) {
+            get().selectVisa("trabajo");
+          } else if (lowerText.includes("nómada") || lowerText.includes("remoto") || lowerText.includes("freelance")) {
+            get().selectVisa("nomada");
+          } else {
+            get().selectVisa("trabajo"); // Por defecto
+          }
+        }
+      } catch {
+        // Si no es JSON válido, usar lógica de palabras clave
+        if (lowerText.includes("estudiar") || lowerText.includes("estudio") || lowerText.includes("universidad")) {
+          get().selectVisa("estudio");
+        } else if (lowerText.includes("trabajar") || lowerText.includes("trabajo") || lowerText.includes("empleo")) {
+          get().selectVisa("trabajo");
+        } else if (lowerText.includes("nómada") || lowerText.includes("remoto") || lowerText.includes("freelance")) {
+          get().selectVisa("nomada");
+        } else {
+          get().selectVisa("trabajo"); // Por defecto
+        }
+      }
+    } catch (error) {
+      console.error("Error determining visa:", error);
+      get().selectVisa("trabajo");
+    }
+  },
+
+  determineVisaAutomatically: async () => {
+    const summary = get().getConversationSummary();
+    try {
+      const res = await fetch("/api/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ 
+          history: [{ role: "user", content: `Basándote en esta conversación, determina el tipo de visa: ${summary}` }],
+          adminContext: get().adminConfig?.aiContext 
+        }),
+      });
+      const data = await res.json();
+      const response = data.response;
+      
+      try {
+        const parsed = JSON.parse(response);
+        if (parsed.visa) {
+          const visa = parsed.visa as "estudio" | "nomada" | "trabajo";
+          get().selectVisa(visa);
+        }
+      } catch {
+        // Si no es JSON válido, usar visa por defecto
+        get().selectVisa("trabajo");
+      }
+    } catch (error) {
+      console.error("Error determining visa:", error);
+      get().selectVisa("trabajo");
     }
   },
 }));
-
-

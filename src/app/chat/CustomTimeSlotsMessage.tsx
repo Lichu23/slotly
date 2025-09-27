@@ -2,7 +2,11 @@
 
 import Calendar from "./Calendar";
 
-export function TimeSlotsMessage({ onPick }: { onPick: (date: string, time: string) => void }) {
+interface CustomTimeSlotsMessageProps {
+  onPick: (date: string, time: string) => void;
+}
+
+export function CustomTimeSlotsMessage({ onPick }: CustomTimeSlotsMessageProps) {
   const handleDateAndTimeSelect = (date: string, time: string) => {
     onPick(date, time);
   };

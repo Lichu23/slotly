@@ -5,6 +5,20 @@ import { ChatContainer, ConversationHeader, MessageList, Message, MessageInput, 
 import "@chatscope/chat-ui-kit-styles/dist/default/styles.min.css";
 import { useChatStore } from "./store";
 
+// CSS para sobrescribir el fondo azul de ChatScope
+const customStyles = `
+  .cs-message__content {
+    background: transparent !important;
+  }
+  .cs-message--incoming .cs-message__content {
+    background: transparent !important;
+  }
+  .cs-message--outgoing .cs-message__content {
+    background: transparent !important;
+  }
+`;
+
+
 export default function ChatPage() {
   const { messages, isBotTyping, sendUserMessage, ensureBootstrapped } = useChatStore();
 
@@ -13,30 +27,45 @@ export default function ChatPage() {
   }, [ensureBootstrapped]);
 
   return (
-    <div className="h-screen w-full flex items-center justify-center">
-      <div className="h-[90vh] w-full max-w-[900px]">
-        <ChatContainer>
-          <ConversationHeader>
-            <ConversationHeader.Content userName="Asesoría de Visas" info="Chat de consulta" />
+    <div className="h-screen w-full flex flex-col">
+      <style dangerouslySetInnerHTML={{ __html: customStyles }} />
+      <div className="h-full w-full max-w-4xl mx-auto flex flex-col">
+        <ChatContainer className="h-full flex flex-col">
+          <ConversationHeader className="bg-white border-b border-gray-200 flex-shrink-0">
+            <ConversationHeader.Content 
+              userName="Asesoría de Visas" 
+              info="Chat de consulta" 
+              className="text-black font-semibold"
+            />
           </ConversationHeader>
-          <MessageList typingIndicator={isBotTyping ? <TypingIndicator content="Escribiendo..." /> : undefined} autoScrollToBottom autoScrollToBottomOnMount>
+          <MessageList 
+            className="bg-white flex-1 overflow-y-auto [&_.cs-message]:mb-4"
+            typingIndicator={isBotTyping ? <TypingIndicator content="Escribiendo..." /> : undefined} 
+            autoScrollToBottom 
+            autoScrollToBottomOnMount
+          >
             {messages.map((m) => {
               const time = new Date(m.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-              const bubbleColor = m.role === "user"
-                ? "bg-[#dcf8c6] text-neutral-900 dark:bg-[#0b4f3a] dark:text-neutral-200"
-                : "bg-gray-100 text-neutral-900 dark:bg-neutral-800 dark:text-neutral-100";
               return (
-                <Message key={m.id} model={{ message: "", direction: m.role === "user" ? "outgoing" : "incoming", position: "single" }}>
+                <Message key={m.id} data-message-id={m.id} model={{ message: "", direction: m.role === "user" ? "outgoing" : "incoming", position: "single" }}>
                   <Message.CustomContent>
-                    <div className={`relative pr-10 ${m.render ? "custom-block" : ""}`}>
-                      {(m.text) ? (
-                        <div className={`inline-block rounded-[14px] px-3 py-2 ${bubbleColor}`}>
-                          <span className="whitespace-pre-wrap">{m.text}</span>
+                    {(m.text) ? (
+                      <div className={`rounded-xl relative px-3 py-3 border ${
+                        m.role === "user" 
+                          ? "bg-black text-white border-black" 
+                          : "bg-white text-black border-gray-300"
+                      }`}>
+                        <div className="pr-12">
+                          <span className="whitespace-pre-wrap" dangerouslySetInnerHTML={{ __html: m.text.replace(/&nbsp;/g, ' ') }} />
                         </div>
-                      ) : null}
-                      {m.render ? m.render : null}
-                      <span className="absolute right-1 bottom-1 text-[11px] opacity-70 select-none whitespace-nowrap">{time}</span>
-                    </div>
+                        <span className="absolute right-2 bottom-2 text-xs opacity-60 select-none whitespace-nowrap">{time}</span>
+                      </div>
+                    ) : null}
+                    {m.render ? (
+                      <div className="w-full mt-2">
+                        {m.render}
+                      </div>
+                    ) : null}
                   </Message.CustomContent>
                 </Message>
               );
@@ -44,12 +73,15 @@ export default function ChatPage() {
           </MessageList>
           {/* Input visible solo en modo preguntas */}
           {useChatStore.getState().mode === "asking" ? (
-            <MessageInput placeholder="Escribe tu respuesta..." attachButton={false} onSend={(text) => sendUserMessage(text)} />
+            <MessageInput 
+              placeholder="Escribe tu respuesta..." 
+              attachButton={false} 
+              onSend={(text) => sendUserMessage(text)}
+              className="bg-white border-t border-gray-200 flex-shrink-0"
+            />
           ) : null}
         </ChatContainer>
       </div>
     </div>
   );
 }
-
-

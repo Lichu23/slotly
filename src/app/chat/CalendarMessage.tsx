@@ -3,28 +3,25 @@
 import { useState } from "react";
 
 export function CalendarMessage({ onSelect }: { onSelect: (dateISO: string) => void }) {
-  const today = new Date();
-  const min = today.toISOString().slice(0, 10);
-  const [value, setValue] = useState<string>(min);
+  const [value, setValue] = useState("");
+  const min = new Date().toISOString().split("T")[0]; // Today
 
   return (
-    <div className="flex flex-col sm:flex-row items-stretch sm:items-end gap-2 w-full">
+    <div className="flex flex-col gap-3 w-full">
       <input
         type="date"
         min={min}
         value={value}
         onChange={(e) => setValue(e.target.value)}
-        className="border rounded-md px-3 py-2 w-full"
+        className="w-full px-4 py-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-black focus:border-transparent transition-colors text-base"
       />
       <button
         type="button"
         onClick={() => onSelect(value)}
-        className="px-3 py-2 rounded-lg bg-neutral-900 text-white w-full sm:w-auto whitespace-nowrap"
+        className="w-full px-4 py-3 rounded-md bg-black text-white font-medium hover:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-black focus:ring-offset-2 transition-colors cursor-pointer text-base"
       >
         Confirmar fecha
       </button>
     </div>
   );
 }
-
-
