@@ -23,7 +23,8 @@ CREATE TABLE IF NOT EXISTS bookings (
   visa_type VARCHAR(50),
   status VARCHAR(50) DEFAULT 'pending', -- pending, confirmed, cancelled
   payment_id VARCHAR(255), -- ID de la sesión de Stripe
-  created_at TIMESTAMP DEFAULT NOW()
+  created_at TIMESTAMP DEFAULT NOW(),
+  updated_at TIMESTAMP DEFAULT NOW()
 );
 
 -- 3. Crear índices para mejor rendimiento
@@ -87,6 +88,12 @@ BEGIN
   IF NOT EXISTS (SELECT 1 FROM information_schema.columns 
                  WHERE table_name = 'bookings' AND column_name = 'payment_id') THEN
     ALTER TABLE bookings ADD COLUMN payment_id VARCHAR(255);
+  END IF;
+  
+  -- Agregar columna updated_at si no existe
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns 
+                 WHERE table_name = 'bookings' AND column_name = 'updated_at') THEN
+    ALTER TABLE bookings ADD COLUMN updated_at TIMESTAMP DEFAULT NOW();
   END IF;
   
   RAISE NOTICE 'Tabla bookings actualizada con nuevas columnas';

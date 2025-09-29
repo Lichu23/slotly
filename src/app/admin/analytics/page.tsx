@@ -1,9 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useAdminStore } from "../store";
+import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { useUser, useClerk } from '@clerk/nextjs';
+import { useUser } from '@clerk/nextjs';
 import AdminNavigation from "../AdminNavigation";
 
 interface AnalyticsData {
@@ -22,29 +21,18 @@ interface AnalyticsData {
   }>;
   averageBookingTime: number;
   conversionRate: number;
+  hasData: boolean;
+  noDataMessage?: string;
 }
 
 export default function AdminAnalytics() {
   const { user, isLoaded } = useUser();
-  const { signOut } = useClerk();
   const [analytics, setAnalytics] = useState<AnalyticsData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [dateRange, setDateRange] = useState("30"); // días
   const router = useRouter();
 
-  useEffect(() => {
-    if (isLoaded && !user) {
-      router.push("/admin/login");
-    }
-  }, [isLoaded, user, router]);
-
-  useEffect(() => {
-    if (user) {
-      loadAnalytics();
-    }
-  }, [user, dateRange]);
-
-  const loadAnalytics = async () => {
+  const loadAnalytics = useCallback(async () => {
     try {
       setIsLoading(true);
       const response = await fetch(`/api/admin/analytics?days=${dateRange}`);
@@ -57,7 +45,19 @@ export default function AdminAnalytics() {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [dateRange]);
+
+  useEffect(() => {
+    if (isLoaded && !user) {
+      router.push("/admin/login");
+    }
+  }, [isLoaded, user, router]);
+
+  useEffect(() => {
+    if (user) {
+      loadAnalytics();
+    }
+  }, [user, loadAnalytics]);
 
   if (!isLoaded) {
     return (
@@ -81,7 +81,7 @@ export default function AdminAnalytics() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center py-6">
             <div>
-              <h1 className="text-3xl font-bold text-gray-900">Analytics y Reportes</h1>
+              <h1 className="text-xl lg:text-3xl font-bold text-gray-900">Analytics y Reportes</h1>
               <p className="text-gray-600">Análisis detallado del rendimiento del sistema</p>
             </div>
             <AdminNavigation />
@@ -128,130 +128,152 @@ export default function AdminAnalytics() {
           </div>
         ) : analytics ? (
           <div className="space-y-6">
-            {/* Key Metrics */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-              <div className="bg-white rounded-lg shadow p-6">
-                <div className="flex items-center">
-                  <div className="flex-shrink-0">
-                    <div className="w-8 h-8 bg-blue-500 rounded-md flex items-center justify-center">
-                      <span className="text-white font-bold">📊</span>
+            {/* No Data Message */}
+            {!analytics.hasData && analytics.noDataMessage && (
+              <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-6 text-center">
+                <div className="flex items-center justify-center mb-4">
+                  <div className="w-12 h-12 bg-yellow-100 rounded-full flex items-center justify-center">
+                    <span className="text-2xl">📊</span>
+                  </div>
+                </div>
+                <h3 className="text-lg font-medium text-yellow-800 mb-2">Sin Datos Disponibles</h3>
+                <p className="text-yellow-700">{analytics.noDataMessage}</p>
+                <p className="text-sm text-yellow-600 mt-2">
+                  Los datos aparecerán aquí una vez que tengas reservas confirmadas.
+                </p>
+              </div>
+            )}
+
+            {/* Key Metrics - Solo mostrar si hay datos */}
+            {analytics.hasData && (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                <div className="bg-white rounded-lg shadow p-6">
+                  <div className="flex items-center">
+                    <div className="flex-shrink-0">
+                      <div className="w-8 h-8 bg-blue-500 rounded-md flex items-center justify-center">
+                        <span className="text-white font-bold">📊</span>
+                      </div>
+                    </div>
+                    <div className="ml-4">
+                      <p className="text-sm font-medium text-gray-500">Total Reservas</p>
+                      <p className="text-2xl font-semibold text-gray-900">{analytics.totalBookings}</p>
                     </div>
                   </div>
-                  <div className="ml-4">
-                    <p className="text-sm font-medium text-gray-500">Total Reservas</p>
-                    <p className="text-2xl font-semibold text-gray-900">{analytics.totalBookings}</p>
+                </div>
+
+                <div className="bg-white rounded-lg shadow p-6">
+                  <div className="flex items-center">
+                    <div className="flex-shrink-0">
+                      <div className="w-8 h-8 bg-green-500 rounded-md flex items-center justify-center">
+                        <span className="text-white font-bold">⏱️</span>
+                      </div>
+                    </div>
+                    <div className="ml-4">
+                      <p className="text-sm font-medium text-gray-500">Tiempo Promedio</p>
+                      <p className="text-2xl font-semibold text-gray-900">{analytics.averageBookingTime} min</p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="bg-white rounded-lg shadow p-6">
+                  <div className="flex items-center">
+                    <div className="flex-shrink-0">
+                      <div className="w-8 h-8 bg-purple-500 rounded-md flex items-center justify-center">
+                        <span className="text-white font-bold">📈</span>
+                      </div>
+                    </div>
+                    <div className="ml-4">
+                      <p className="text-sm font-medium text-gray-500">Tasa de Conversión</p>
+                      <p className="text-2xl font-semibold text-gray-900">{analytics.conversionRate}%</p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="bg-white rounded-lg shadow p-6">
+                  <div className="flex items-center">
+                    <div className="flex-shrink-0">
+                      <div className="w-8 h-8 bg-yellow-500 rounded-md flex items-center justify-center">
+                        <span className="text-white font-bold">💰</span>
+                      </div>
+                    </div>
+                    <div className="ml-4">
+                      <p className="text-sm font-medium text-gray-500">Ingresos Totales</p>
+                      <p className="text-2xl font-semibold text-gray-900">€{analytics.revenueByMonth.reduce((sum, item) => sum + item.revenue, 0)}</p>
+                    </div>
                   </div>
                 </div>
               </div>
+            )}
 
-              <div className="bg-white rounded-lg shadow p-6">
-                <div className="flex items-center">
-                  <div className="flex-shrink-0">
-                    <div className="w-8 h-8 bg-green-500 rounded-md flex items-center justify-center">
-                      <span className="text-white font-bold">⏱️</span>
-                    </div>
-                  </div>
-                  <div className="ml-4">
-                    <p className="text-sm font-medium text-gray-500">Tiempo Promedio</p>
-                    <p className="text-2xl font-semibold text-gray-900">{analytics.averageBookingTime} min</p>
-                  </div>
-                </div>
-              </div>
-
-              <div className="bg-white rounded-lg shadow p-6">
-                <div className="flex items-center">
-                  <div className="flex-shrink-0">
-                    <div className="w-8 h-8 bg-purple-500 rounded-md flex items-center justify-center">
-                      <span className="text-white font-bold">📈</span>
-                    </div>
-                  </div>
-                  <div className="ml-4">
-                    <p className="text-sm font-medium text-gray-500">Tasa de Conversión</p>
-                    <p className="text-2xl font-semibold text-gray-900">{analytics.conversionRate}%</p>
-                  </div>
-                </div>
-              </div>
-
-              <div className="bg-white rounded-lg shadow p-6">
-                <div className="flex items-center">
-                  <div className="flex-shrink-0">
-                    <div className="w-8 h-8 bg-yellow-500 rounded-md flex items-center justify-center">
-                      <span className="text-white font-bold">💰</span>
-                    </div>
-                  </div>
-                  <div className="ml-4">
-                    <p className="text-sm font-medium text-gray-500">Ingresos Totales</p>
-                    <p className="text-2xl font-semibold text-gray-900">€{analytics.revenueByMonth.reduce((sum, item) => sum + item.revenue, 0)}</p>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Charts Grid */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              {/* Bookings by Month */}
-              <div className="bg-white rounded-lg shadow p-6">
-                <h3 className="text-lg font-medium text-gray-900 mb-4">Reservas por Mes</h3>
-                <div className="space-y-3">
-                  {analytics.bookingsByMonth.map((item, index) => (
-                    <div key={index} className="flex items-center justify-between">
-                      <span className="text-sm text-gray-600">{item.month}</span>
-                      <div className="flex items-center">
-                        <div className="w-32 bg-gray-200 rounded-full h-2 mr-3">
-                          <div 
-                            className="bg-blue-500 h-2 rounded-full" 
-                            style={{ width: `${(item.count / Math.max(...analytics.bookingsByMonth.map(b => b.count))) * 100}%` }}
-                          ></div>
+            {/* Charts Grid - Solo mostrar si hay datos */}
+            {analytics.hasData && (
+              <>
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  {/* Bookings by Month */}
+                  <div className="bg-white rounded-lg shadow p-6">
+                    <h3 className="text-lg font-medium text-gray-900 mb-4">Reservas por Mes</h3>
+                    <div className="space-y-3">
+                      {analytics.bookingsByMonth.map((item, index) => (
+                        <div key={index} className="flex items-center justify-between">
+                          <span className="text-sm text-gray-600">{item.month}</span>
+                          <div className="flex items-center">
+                            <div className="w-32 bg-gray-200 rounded-full h-2 mr-3">
+                              <div 
+                                className="bg-blue-500 h-2 rounded-full" 
+                                style={{ width: `${(item.count / Math.max(...analytics.bookingsByMonth.map(b => b.count))) * 100}%` }}
+                              ></div>
+                            </div>
+                            <span className="text-sm font-medium text-gray-900">{item.count}</span>
+                          </div>
                         </div>
-                        <span className="text-sm font-medium text-gray-900">{item.count}</span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* Bookings by Visa Type */}
-              <div className="bg-white rounded-lg shadow p-6">
-                <h3 className="text-lg font-medium text-gray-900 mb-4">Reservas por Tipo de Visa</h3>
-                <div className="space-y-3">
-                  {analytics.bookingsByVisaType.map((item, index) => (
-                    <div key={index} className="flex items-center justify-between">
-                      <span className="text-sm text-gray-600">{item.visaType}</span>
-                      <div className="flex items-center">
-                        <div className="w-32 bg-gray-200 rounded-full h-2 mr-3">
-                          <div 
-                            className="bg-green-500 h-2 rounded-full" 
-                            style={{ width: `${(item.count / Math.max(...analytics.bookingsByVisaType.map(b => b.count))) * 100}%` }}
-                          ></div>
-                        </div>
-                        <span className="text-sm font-medium text-gray-900">{item.count}</span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-
-            {/* Revenue Chart */}
-            <div className="bg-white rounded-lg shadow p-6">
-              <h3 className="text-lg font-medium text-gray-900 mb-4">Ingresos por Mes</h3>
-              <div className="space-y-3">
-                {analytics.revenueByMonth.map((item, index) => (
-                  <div key={index} className="flex items-center justify-between">
-                    <span className="text-sm text-gray-600">{item.month}</span>
-                    <div className="flex items-center">
-                      <div className="w-32 bg-gray-200 rounded-full h-2 mr-3">
-                        <div 
-                          className="bg-purple-500 h-2 rounded-full" 
-                          style={{ width: `${(item.revenue / Math.max(...analytics.revenueByMonth.map(r => r.revenue))) * 100}%` }}
-                        ></div>
-                      </div>
-                      <span className="text-sm font-medium text-gray-900">€{item.revenue}</span>
+                      ))}
                     </div>
                   </div>
-                ))}
-              </div>
-            </div>
+
+                  {/* Bookings by Visa Type */}
+                  <div className="bg-white rounded-lg shadow p-6">
+                    <h3 className="text-lg font-medium text-gray-900 mb-4">Reservas por Tipo de Visa</h3>
+                    <div className="space-y-3">
+                      {analytics.bookingsByVisaType.map((item, index) => (
+                        <div key={index} className="flex items-center justify-between">
+                          <span className="text-sm text-gray-600">{item.visaType}</span>
+                          <div className="flex items-center">
+                            <div className="w-32 bg-gray-200 rounded-full h-2 mr-3">
+                              <div 
+                                className="bg-green-500 h-2 rounded-full" 
+                                style={{ width: `${(item.count / Math.max(...analytics.bookingsByVisaType.map(b => b.count))) * 100}%` }}
+                              ></div>
+                            </div>
+                            <span className="text-sm font-medium text-gray-900">{item.count}</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Revenue Chart */}
+                <div className="bg-white rounded-lg shadow p-6">
+                  <h3 className="text-lg font-medium text-gray-900 mb-4">Ingresos por Mes</h3>
+                  <div className="space-y-3">
+                    {analytics.revenueByMonth.map((item, index) => (
+                      <div key={index} className="flex items-center justify-between">
+                        <span className="text-sm text-gray-600">{item.month}</span>
+                        <div className="flex items-center">
+                          <div className="w-32 bg-gray-200 rounded-full h-2 mr-3">
+                            <div 
+                              className="bg-purple-500 h-2 rounded-full" 
+                              style={{ width: `${(item.revenue / Math.max(...analytics.revenueByMonth.map(r => r.revenue))) * 100}%` }}
+                            ></div>
+                          </div>
+                          <span className="text-sm font-medium text-gray-900">€{item.revenue}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </>
+            )}
           </div>
         ) : (
           <div className="bg-white rounded-lg shadow p-8 text-center">

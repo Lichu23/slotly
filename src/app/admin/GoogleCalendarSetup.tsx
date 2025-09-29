@@ -63,11 +63,17 @@ export default function GoogleCalendarSetup({
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ credentials: event.data.credentials }),
+          }).then(response => {
+            if (response.ok) {
+              setSuccess("¡Conectado exitosamente con Google Calendar!");
+            } else {
+              setError("Error al guardar credenciales en el servidor");
+            }
           }).catch(error => {
             console.error("Error guardando credenciales:", error);
+            setError("Error al guardar credenciales en el servidor");
           });
           
-          setSuccess("¡Conectado exitosamente con Google Calendar!");
           popup?.close();
           window.removeEventListener("message", messageListener);
         } else if (event.data.type === "GOOGLE_AUTH_ERROR") {
@@ -130,7 +136,7 @@ export default function GoogleCalendarSetup({
 
   return (
     <div className="bg-white border border-gray-200 rounded-lg shadow-sm p-6">
-      <h2 className="text-2xl font-bold text-black mb-6">
+      <h2 className="text-xl lg:text-2xl font-bold text-black mb-6">
         📅 Configuración de Google Calendar
       </h2>
 
@@ -149,8 +155,8 @@ export default function GoogleCalendarSetup({
       <div className="space-y-6">
         {/* Estado de conexión */}
         <div className="flex items-center space-x-4">
-          <div className={`w-3 h-3 rounded-full ${isConnected ? 'bg-green-500' : 'bg-red-500'}`}></div>
-          <span className="text-lg font-medium">
+          <div className={`lg:w-3 lg:h-3 w-2 h-2 rounded-full ${isConnected ? 'bg-green-500' : 'bg-red-500'}`}></div>
+          <span className="text-sm lg:text-lg font-medium">
             {isConnected ? "Conectado con Google Calendar" : "No conectado con Google Calendar"}
           </span>
         </div>
@@ -209,13 +215,13 @@ export default function GoogleCalendarSetup({
             <>
               <button
                 onClick={testConnection}
-                className="px-6 py-3 bg-green-600 text-white rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 transition-colors"
+                className="px-3 py-3 bg-green-600 text-white rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 transition-colors"
               >
                 Probar Conexión
               </button>
               <button
                 onClick={handleDisconnect}
-                className="px-6 py-3 bg-red-600 text-white rounded-md hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 transition-colors"
+                className="px-3 py-3 bg-red-600 text-white rounded-md hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 transition-colors"
               >
                 Desconectar
               </button>

@@ -64,7 +64,7 @@ export default function AdminPage() {
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-black mx-auto"></div>
-          <p className="mt-4 text-gray-600">Cargando...</p>
+          <p className="mt-4 text-gray-600 text-sm sm:text-base">Cargando...</p>
         </div>
       </div>
     );
@@ -79,10 +79,10 @@ export default function AdminPage() {
       {/* Header */}
       <div className="bg-white shadow">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center py-6">
+          <div className="flex justify-between items-center py-4 sm:py-6">
             <div>
-              <h1 className="text-3xl font-bold text-gray-900">Panel de Administración</h1>
-              <p className="text-gray-600">Bienvenido, {user?.firstName || user?.emailAddresses[0]?.emailAddress}</p>
+              <h1 className="text-xl lg:text-3xl font-bold text-gray-900">Panel de Administración</h1>
+              <p className="text-gray-600 text-sm sm:text-base">Bienvenido, {user?.firstName || user?.emailAddresses[0]?.emailAddress}</p>
             </div>
             <AdminNavigation />
           </div>
@@ -90,7 +90,7 @@ export default function AdminPage() {
       </div>
 
       {/* Main Content */}
-      <div className="max-w-4xl mx-auto px-4 py-8 space-y-8">
+      <div className="max-w-4xl mx-auto px-4 py-4 sm:py-8 space-y-6 sm:space-y-8">
         {/* Google Calendar Setup */}
         <GoogleCalendarSetup
           onConnect={connectGoogleCalendar}
@@ -99,8 +99,8 @@ export default function AdminPage() {
         />
 
         {/* AI Configuration */}
-        <div className="bg-white border border-gray-200 rounded-lg shadow-sm p-6">
-          <h2 className="text-2xl font-bold text-black mb-8">
+        <div className="bg-white border border-gray-200 rounded-lg shadow-sm p-4 sm:p-6">
+          <h2 className="text-lg lg:text-2xl font-bold text-black mb-6 sm:mb-8">
             Configuración de IA
           </h2>
           
@@ -115,10 +115,10 @@ export default function AdminPage() {
                 value={aiContext}
                 onChange={(e) => updateContext(e.target.value)}
                 rows={8}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm sm:text-base"
                 placeholder="Ingresa el contexto específico que quieres que la IA use para responder a los clientes sobre visas de España..."
               />
-              <p className="mt-1 text-sm text-gray-500">
+              <p className="mt-1 text-xs sm:text-sm text-gray-500">
                 Este contexto se enviará a la IA para que responda de manera más específica y útil.
               </p>
             </div>
@@ -135,9 +135,9 @@ export default function AdminPage() {
                 max="10"
                 value={maxQuestions}
                 onChange={(e) => updateMaxQuestions(parseInt(e.target.value))}
-                className="w-32 px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                className="w-32 px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm sm:text-base"
               />
-              <p className="mt-1 text-sm text-gray-500">
+              <p className="mt-1 text-xs sm:text-sm text-gray-500">
                 Después de este número de preguntas, la IA determinará automáticamente el tipo de visa y mostrará el formulario.
               </p>
             </div>
@@ -154,11 +154,11 @@ export default function AdminPage() {
             )}
 
             {/* Botones de acción */}
-            <div className="flex gap-4">
+            <div className="flex flex-col sm:flex-row gap-4">
               <button
                 onClick={handleSave}
                 disabled={isLoading}
-                className="px-6 py-2 bg-black text-white rounded-md hover:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-black focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                className="px-6 py-2 bg-black text-white rounded-md hover:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-black focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-sm sm:text-base"
               >
                 {isLoading ? "Guardando..." : "Guardar Configuración"}
               </button>
@@ -166,7 +166,7 @@ export default function AdminPage() {
               <button
                 onClick={handleLoad}
                 disabled={isLoading}
-                className="px-6 py-2 bg-white text-black border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-black focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                className="px-6 py-2 bg-white text-black border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-black focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-sm sm:text-base"
               >
                 {isLoading ? "Cargando..." : "Cargar Configuración"}
               </button>
@@ -174,11 +174,11 @@ export default function AdminPage() {
 
             {/* Vista previa del contexto */}
             <div className="mt-8">
-              <h3 className="text-lg font-medium text-gray-900 mb-3">
+              <h3 className="text-base lg:text-lg font-medium text-gray-900 mb-3">
                 Vista previa del contexto
               </h3>
               <div className="bg-gray-100 p-4 rounded-md">
-                <pre className="text-sm text-gray-700 whitespace-pre-wrap">
+                <pre className="text-xs sm:text-sm text-gray-700 whitespace-pre-wrap">
                   {aiContext || "No hay contexto configurado aún..."}
                 </pre>
               </div>

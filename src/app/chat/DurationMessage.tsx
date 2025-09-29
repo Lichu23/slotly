@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 const DURATION_OPTIONS = [
   { value: 30, label: "30 minutos", price: 25 },
@@ -14,6 +14,32 @@ export function DurationMessage({ onSelect }: { onSelect: (duration: number, pri
     if (selectedDuration) return; // No permitir selección si ya hay una seleccionada
     setSelectedDuration(duration);
     onSelect(duration, price);
+    
+    // Scroll automático después de la selección - múltiples intentos
+    const performScroll = () => {
+      const messageList = document.querySelector('[data-testid="message-list"]') || 
+                         document.querySelector('.cs-message-list') ||
+                         document.querySelector('.overflow-y-auto') ||
+                         document.querySelector('[class*="overflow-y-auto"]') ||
+                         document.querySelector('.flex-1.overflow-y-auto');
+      
+      if (messageList) {
+        messageList.scrollTo({
+          top: messageList.scrollHeight,
+          behavior: 'smooth'
+        });
+      } else {
+        window.scrollTo({
+          top: document.body.scrollHeight,
+          behavior: 'smooth'
+        });
+      }
+    };
+
+    // Múltiples intentos de scroll
+    setTimeout(performScroll, 100);
+    setTimeout(performScroll, 300);
+    setTimeout(performScroll, 600);
   };
 
   return (

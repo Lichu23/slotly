@@ -40,17 +40,34 @@ export async function createGoogleCalendarEvent(
     // Configurar cliente de Calendar
     const calendar = google.calendar({ version: 'v3', auth: oauth2Client });
 
+    // CORREGIDO: Convertir fechas a formato sin zona horaria para evitar conversiones automáticas
+    const formatDateTimeForGoogleCalendar = (dateTimeString: string) => {
+      // Parsear la fecha y convertirla a formato específico sin zona horaria
+      const date = new Date(dateTimeString);
+      
+      // Crear fecha en formato YYYY-MM-DDTHH:MM:SS (sin zona horaria)
+      const year = date.getFullYear();
+      const month = String(date.getMonth() + 1).padStart(2, '0');
+      const day = String(date.getDate()).padStart(2, '0');
+      const hours = String(date.getHours()).padStart(2, '0');
+      const minutes = String(date.getMinutes()).padStart(2, '0');
+      const seconds = String(date.getSeconds()).padStart(2, '0');
+      
+      // Formato: YYYY-MM-DDTHH:MM:SS (sin zona horaria en el string)
+      return `${year}-${month}-${day}T${hours}:${minutes}:${seconds}`;
+    };
+
     // Preparar evento
     const event = {
       summary: eventData.summary,
       description: eventData.description,
       start: {
-        dateTime: eventData.startDateTime,
-        timeZone: "Europe/Madrid",
+        dateTime: formatDateTimeForGoogleCalendar(eventData.startDateTime),
+        timeZone: "Europe/Madrid", // Zona horaria especificada por separado
       },
       end: {
-        dateTime: eventData.endDateTime,
-        timeZone: "Europe/Madrid",
+        dateTime: formatDateTimeForGoogleCalendar(eventData.endDateTime),
+        timeZone: "Europe/Madrid", // Zona horaria especificada por separado
       },
       attendees: eventData.attendees.map(attendee => ({
         email: attendee.email,
@@ -77,6 +94,13 @@ export async function createGoogleCalendarEvent(
       guestsCanSeeOtherGuests: true,
     };
 
+    console.log("📅 Datos del evento (CORREGIDO):", {
+      summary: event.summary,
+      start: event.start,
+      end: event.end,
+      timeZone: "Europe/Madrid"
+    });
+
     // Crear evento
     const createdEvent = await calendar.events.insert({
       calendarId: credentials.calendarId,
@@ -95,6 +119,8 @@ export async function createGoogleCalendarEvent(
     console.log("✅ Evento creado exitosamente en Google Calendar");
     console.log("🆔 ID del evento:", createdEvent.data.id);
     console.log("🔗 Enlace Meet:", meetLink);
+    console.log("📅 Hora de inicio:", createdEvent.data.start?.dateTime);
+    console.log("📅 Zona horaria:", createdEvent.data.start?.timeZone);
 
     return {
       success: true,

@@ -7,17 +7,17 @@ import { createGoogleCalendarEvent, getAdminGoogleCalendarCredentials } from "@/
 export const runtime = "nodejs"; // ensure Node runtime for webhooks
 
 export async function POST(request: Request) {
-  console.log("🔔 Webhook de Stripe recibido");
+  // console.log("🔔 Webhook de Stripe recibido");
   
-  const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || "", { apiVersion: "2024-06-20" });
+  const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || "", { apiVersion: "2025-08-27.basil" });
   const sig = request.headers.get("stripe-signature");
   const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
   
-  console.log("🔑 Variables de entorno:", {
-    hasStripeKey: !!process.env.STRIPE_SECRET_KEY,
-    hasWebhookSecret: !!webhookSecret,
-    hasSignature: !!sig
-  });
+  // console.log("🔑 Variables de entorno:", {
+  //   hasStripeKey: !!process.env.STRIPE_SECRET_KEY,
+  //   hasWebhookSecret: !!webhookSecret,
+  //   hasSignature: !!sig
+  // });
   
   if (!sig || !webhookSecret) {
     console.error("❌ Faltan signature o webhook secret");
@@ -28,9 +28,9 @@ export async function POST(request: Request) {
   let event: Stripe.Event;
   try {
     event = stripe.webhooks.constructEvent(buf, sig, webhookSecret);
-    console.log("✅ Evento de Stripe verificado:", event.type);
-  } catch (err: any) {
-    console.error("❌ Error verificando signature:", err.message);
+    // console.log("✅ Evento de Stripe verificado:", event.type);
+  } catch (err: unknown) {
+    console.error("❌ Error verificando signature:", err instanceof Error ? err.message : String(err));
     return NextResponse.json({ error: "Signature verification failed" }, { status: 400 });
   }
 
@@ -38,60 +38,141 @@ export async function POST(request: Request) {
     if (event.type === "checkout.session.completed") {
       const session = event.data.object as Stripe.Checkout.Session;
       console.log("💳 Pago completado:", session.id);
-      console.log("📋 Metadata de la sesión:", session.metadata);
+      // console.log("📋 Metadata de la sesión:", session.metadata);
       
-      // Crear booking en Supabase
+      // Actualizar booking existente en Supabase
       if (supabase && session.metadata?.email && session.metadata?.selected_date && session.metadata?.selected_time) {
-        console.log("💾 Creando booking en Supabase...");
+        console.log("💾 Actualizando booking en Supabase...");
         
         // Buscar el slot correspondiente
         const { data: slot, error: slotError } = await supabase
           .from('availability_slots')
-          .select('id')
+          .select('id, current_bookings, max_bookings')
           .eq('date', session.metadata.selected_date)
           .eq('time_slot', session.metadata.selected_time)
           .single();
 
         if (slot && !slotError) {
-          // Crear booking
-          const { data: booking, error: bookingError } = await supabase
+          // Buscar booking existente por slot_id y email
+          const { data: existingBooking, error: findError } = await supabase
             .from('bookings')
-            .insert({
-              slot_id: slot.id,
-              customer_name: session.metadata.name,
-              customer_email: session.metadata.email,
-              customer_phone: session.metadata.phone,
-              visa_type: session.metadata.visa_type,
-              status: 'confirmed',
-              payment_id: session.id
-            })
-            .select()
+            .select('id')
+            .eq('slot_id', slot.id)
+            .eq('customer_email', session.metadata.email)
+            .eq('status', 'pending')
             .single();
 
-          if (booking && !bookingError) {
-            console.log("✅ Booking creado exitosamente:", booking.id);
+          if (existingBooking && !findError) {
+            // Actualizar booking existente
+            const { data: booking, error: bookingError } = await supabase
+              .from('bookings')
+              .update({
+                status: 'confirmed',
+                payment_id: session.id,
+                updated_at: new Date().toISOString()
+              })
+              .eq('id', existingBooking.id)
+              .select()
+              .single();
+
+            if (booking && !bookingError) {
+              console.log("✅ Booking actualizado exitosamente:", booking.id);
+              
+              // Actualizar current_bookings en el slot
+              const { error: slotUpdateError } = await supabase
+                .from('availability_slots')
+                .update({ 
+                  current_bookings: slot.current_bookings + 1,
+                  updated_at: new Date().toISOString()
+                })
+                .eq('id', slot.id);
+
+              if (slotUpdateError) {
+                console.error('❌ AVAILABILITY_SLOTS UPDATE ERROR:', slotUpdateError);
+              } else {
+                console.log(`✅ AVAILABILITY_SLOTS UPDATE SUCCESS - Slot ${slot.id} actualizado: ${slot.current_bookings} -> ${slot.current_bookings + 1}`);
+              }
+            } else {
+              console.error("❌ Error actualizando booking:", bookingError);
+            }
           } else {
-            console.error("❌ Error creando booking:", bookingError);
+            console.log("⚠️ No se encontró booking pendiente, creando nuevo...");
+            // Crear booking nuevo como fallback
+            const { data: booking, error: bookingError } = await supabase
+              .from('bookings')
+              .insert({
+                slot_id: slot.id,
+                customer_name: session.metadata.name,
+                customer_email: session.metadata.email,
+                customer_phone: session.metadata.phone,
+                visa_type: session.metadata.visa_type,
+                status: 'confirmed',
+                payment_id: session.id
+              })
+              .select()
+              .single();
+
+            if (booking && !bookingError) {
+              console.log("✅ Booking creado exitosamente:", booking.id);
+              
+              // Actualizar current_bookings en el slot
+              const { error: slotUpdateError } = await supabase
+                .from('availability_slots')
+                .update({ 
+                  current_bookings: slot.current_bookings + 1,
+                  updated_at: new Date().toISOString()
+                })
+                .eq('id', slot.id);
+
+              if (slotUpdateError) {
+                console.error('❌ AVAILABILITY_SLOTS UPDATE ERROR:', slotUpdateError);
+              } else {
+                console.log(`✅ AVAILABILITY_SLOTS UPDATE SUCCESS - Slot ${slot.id} actualizado: ${slot.current_bookings} -> ${slot.current_bookings + 1}`);
+              }
+            } else {
+              console.error("❌ Error creando booking:", bookingError);
+            }
           }
         } else {
           console.error("❌ No se encontró el slot para la fecha y hora seleccionadas");
         }
       } else {
-        console.log("⚠️ No se pudo crear booking - faltan datos en metadata");
+        console.log("⚠️ No se pudo actualizar booking - faltan datos en metadata");
       }
 
       // Preparar datos comunes para ambos emails
       const { visa_type, name, email, phone, invitados, comment, selected_date, selected_time } = session.metadata || {};
       const price = session.amount_total ? session.amount_total / 100 : 0; // Convertir de centavos a euros
       
-      // Crear fecha y hora de inicio y fin del evento
-      const startDateTime = selected_date && selected_time ? 
-        new Date(`${selected_date}T${selected_time}:00`) : new Date();
+      // Crear fecha y hora de inicio y fin del evento (CORREGIDO: validación de fechas)
+      let startDateTime: Date;
+      
+      if (selected_date && selected_time) {
+        try {
+          // Crear fecha interpretándola como hora local de España
+          const [year, month, day] = selected_date.split('-').map(Number);
+          const [hours, minutes] = selected_time.split(':').map(Number);
+          
+          // Crear fecha en zona horaria local (España)
+          startDateTime = new Date(year, month - 1, day, hours, minutes, 0);
+          
+          // Verificar que la fecha es válida
+          if (isNaN(startDateTime.getTime())) {
+            console.error("❌ Fecha inválida:", selected_date, selected_time);
+            startDateTime = new Date(); // Fallback a fecha actual
+          }
+        } catch (error) {
+          console.error("❌ Error creando fecha:", error);
+          startDateTime = new Date(); // Fallback a fecha actual
+        }
+      } else {
+        startDateTime = new Date(); // Fallback a fecha actual
+      }
+      
       const endDateTime = new Date(startDateTime.getTime() + 30 * 60000); // 30 minutos después
       
       // Intentar crear evento en Google Calendar real
       let meetLink = `https://meet.google.com/${Math.random().toString(36).substring(2, 15)}`; // Fallback
-      let googleCalendarEvent = null;
       
       try {
         // Obtener credenciales del admin
@@ -99,6 +180,13 @@ export async function POST(request: Request) {
         
         if (adminCredentials) {
           console.log("📅 Creando evento real en Google Calendar...");
+          console.log("🔍 Credenciales encontradas para:", adminCredentials.email);
+          
+          // Validar que las fechas son válidas antes de crear el evento
+          if (isNaN(startDateTime.getTime()) || isNaN(endDateTime.getTime())) {
+            console.error("❌ Fechas inválidas, no se puede crear el evento en Google Calendar");
+            throw new Error("Fechas inválidas para el evento");
+          }
           
           const eventData = {
             summary: `Consulta de Visa - ${visa_type?.toUpperCase()} - ${name}`,
@@ -128,7 +216,6 @@ Comentarios del cliente: ${comment || 'Sin comentarios adicionales'}
           
           if (googleResult.success && googleResult.meetLink) {
             meetLink = googleResult.meetLink;
-            googleCalendarEvent = googleResult.event;
             console.log("✅ Evento creado exitosamente en Google Calendar");
             console.log("🔗 Enlace Meet oficial:", meetLink);
           } else {
@@ -146,7 +233,7 @@ Comentarios del cliente: ${comment || 'Sin comentarios adicionales'}
 
       // Enviar email de notificación con archivo .ics al owner
       try {
-        console.log("📧 Enviando email de notificación con archivo .ics al owner...");
+        // console.log("📧 Enviando email de notificación con archivo .ics al owner...");
         
         // Formatear fechas para iCalendar con zona horaria
         const formatDateForICS = (date: Date, useTimezone = false) => {
@@ -181,145 +268,104 @@ Cliente: ${name}
 Email: ${email}
 Teléfono: ${phone}
 Duración: 30 minutos
-Enlace de Google Meet: ${meetLink}
 ${invitados ? `Invitados: ${invitados}` : ''}
 
 Comentarios del cliente: ${comment || 'Sin comentarios adicionales'}
 
 ¡Consulta confirmada!`;
 
-        const ownerIcsContent = `BEGIN:VCALENDAR
-PRODID:-//Consultas Visa//Consulta de Visa//ES
+        const icsContent = `BEGIN:VCALENDAR
 VERSION:2.0
+PRODID:-//Consultas Visa//Evento//ES
 CALSCALE:GREGORIAN
 METHOD:REQUEST
-BEGIN:VTIMEZONE
-TZID:Europe/Madrid
-X-LIC-LOCATION:Europe/Madrid
-BEGIN:DAYLIGHT
-TZOFFSETFROM:+0100
-TZOFFSETTO:+0200
-TZNAME:CEST
-DTSTART:19700329T020000
-RRULE:FREQ=YEARLY;BYMONTH=3;BYDAY=-1SU
-END:DAYLIGHT
-BEGIN:STANDARD
-TZOFFSETFROM:+0200
-TZOFFSETTO:+0100
-TZNAME:CET
-DTSTART:19701025T030000
-RRULE:FREQ=YEARLY;BYMONTH=10;BYDAY=-1SU
-END:STANDARD
-END:VTIMEZONE
 BEGIN:VEVENT
+UID:${eventUID}
+DTSTAMP:${nowFormatted}
 DTSTART;TZID=Europe/Madrid:${startTimeFormatted}
 DTEND;TZID=Europe/Madrid:${endTimeFormatted}
-DTSTAMP:${nowFormatted}
-ORGANIZER;CN=Consultas Visa:mailto:${process.env.EMAIL_USER || 'lisandroxarenax@gmail.com'}
-UID:${eventUID}
-ATTENDEE;CUTYPE=INDIVIDUAL;ROLE=REQ-PARTICIPANT;PARTSTAT=ACCEPTED;RSVP=FALSE;CN=${name}:mailto:${email}
-X-GOOGLE-CONFERENCE:${meetLink}
-CREATED:${nowFormatted}
-DESCRIPTION:${eventDescription.replace(/\n/g, '\\n')}
-LAST-MODIFIED:${nowFormatted}
-LOCATION:${meetLink}
-SEQUENCE:0
-STATUS:CONFIRMED
 SUMMARY:${eventTitle}
-TRANSP:OPAQUE
+DESCRIPTION:${eventDescription.replace(/\n/g, '\\n')}
+LOCATION:${meetLink}
+URL:${meetLink}
+STATUS:CONFIRMED
+SEQUENCE:0
 BEGIN:VALARM
 TRIGGER:-PT15M
 ACTION:DISPLAY
-DESCRIPTION:Recordatorio: Consulta de Visa con ${name} en 15 minutos
+DESCRIPTION:Recordatorio: ${eventTitle}
+END:VALARM
+BEGIN:VALARM
+TRIGGER:-PT1H
+ACTION:EMAIL
+DESCRIPTION:Recordatorio por email: ${eventTitle}
 END:VALARM
 END:VEVENT
 END:VCALENDAR`;
-        
-        // Configurar el email para el owner
-        const ownerEmail = process.env.EMAIL_USER || 'lisandroxarenax@gmail.com';
-        const ownerSubject = `Nueva Consulta de Visa - ${visa_type?.toUpperCase()} - ${name}`;
-        
-        const ownerEmailBody = `
-Nueva consulta de visa recibida:
 
-TIPO DE VISA: ${visa_type?.toUpperCase()}
-PRECIO: €${price}
-FECHA SOLICITADA: ${selected_date || 'No especificada'}
-HORARIO SOLICITADO: ${selected_time || 'No especificado'}
-
-INFORMACIÓN DEL CLIENTE:
-- Nombre: ${name}
-- Email: ${email}
-- Teléfono: ${phone}
-${invitados ? `- Invitados: ${invitados}` : ''}
-
-COMENTARIOS ADICIONALES:
-${comment || 'Sin comentarios adicionales'}
-
-ENLACE DE GOOGLE MEET:
-${meetLink}
-
----
-Enviado desde el sistema de consultas de visas
-Fecha: ${new Date().toLocaleString('es-ES')}
-        `.trim();
-
-        // Configurar Nodemailer
+        // Configurar transporter de email (usando las mismas variables que send-email)
         const transporter = nodemailer.createTransport({
           host: 'smtp.gmail.com',
           port: 587,
           secure: false,
           auth: {
-            user: process.env.EMAIL_USER || 'lisandroxarenax@gmail.com',
-            pass: process.env.EMAIL_PASS || 'tu_app_password_aqui'
-          }
+            user: process.env.EMAIL_USER,
+            pass: process.env.EMAIL_PASS,
+          },
         });
 
-        // Enviar email al owner con archivo .ics adjunto
-        const ownerMailOptions = {
-          from: process.env.EMAIL_USER || 'lisandroxarenax@gmail.com',
-          to: ownerEmail,
-          subject: ownerSubject,
-          text: ownerEmailBody,
+        // Enviar email al owner con archivo .ics (FORMATO CON SECCIONES MEJORADO)
+        await transporter.sendMail({
+          from: process.env.EMAIL_USER || 'noreply@consultas-visa.com',
+          to: process.env.EMAIL_USER || 'admin@consultas-visa.com', // Enviar al mismo email del admin
+          subject: `Nueva consulta de visa - ${name} - ${selected_date} ${selected_time}`,
           html: `
-            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-              <h2 style="color: #333; border-bottom: 2px solid #333; padding-bottom: 10px;">
+            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+              <h2 style="color: #333; border-bottom: 2px solid #333; padding-bottom: 10px; margin-bottom: 30px;">
                 Nueva Consulta de Visa - ${visa_type?.toUpperCase()}
               </h2>
               
-              <div style="background-color: #f5f5f5; padding: 20px; border-radius: 5px; margin: 20px 0;">
-                <h3 style="color: #333; margin-top: 0;">Detalles de la Consulta</h3>
-                <p><strong>Tipo de Visa:</strong> ${visa_type?.toUpperCase()}</p>
-                <p><strong>Precio:</strong> €${price}</p>
-                <p><strong>Fecha Solicitada:</strong> ${selected_date || 'No especificada'}</p>
-                <p><strong>Horario Solicitado:</strong> ${selected_time || 'No especificado'}</p>
+              <div style="background-color: #f5f5f5; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #007bff;">
+                <h3 style="color: #333; margin-top: 0; margin-bottom: 15px;">📅 Detalles de la Consulta</h3>
+                <p style="margin: 8px 0;"><strong>Tipo de Visa:</strong> ${visa_type?.toUpperCase()}</p>
+                <p style="margin: 8px 0;"><strong>Precio:</strong> €${price}</p>
+                <p style="margin: 8px 0;"><strong>Fecha Solicitada:</strong> ${selected_date}</p>
+                <p style="margin: 8px 0;"><strong>Horario Solicitado:</strong> ${selected_time}</p>
+                ${invitados ? `<p style="margin: 8px 0;"><strong>Invitados:</strong> ${invitados}</p>` : ''}
               </div>
               
-              <div style="background-color: #e8f4f8; padding: 20px; border-radius: 5px; margin: 20px 0;">
-                <h3 style="color: #333; margin-top: 0;">Información del Cliente</h3>
-                <p><strong>Nombre:</strong> ${name}</p>
-                <p><strong>Email:</strong> ${email}</p>
-                <p><strong>Teléfono:</strong> ${phone}</p>
-                ${invitados ? `<p><strong>Invitados:</strong> ${invitados}</p>` : ''}
+              <div style="background-color: #e8f4f8; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #17a2b8;">
+                <h3 style="color: #333; margin-top: 0; margin-bottom: 15px;">👤 Información del Cliente</h3>
+                <p style="margin: 8px 0;"><strong>Nombre:</strong> ${name}</p>
+                <p style="margin: 8px 0;"><strong>Email:</strong> <a href="mailto:${email}" style="color: #007bff; text-decoration: none;">${email}</a></p>
+                <p style="margin: 8px 0;"><strong>Teléfono:</strong> <a href="tel:${phone}" style="color: #007bff; text-decoration: none;">${phone}</a></p>
               </div>
               
-              <div style="background-color: #fff3cd; padding: 20px; border-radius: 5px; margin: 20px 0;">
-                <h3 style="color: #333; margin-top: 0;">Comentarios Adicionales</h3>
-                <p>${comment || 'Sin comentarios adicionales'}</p>
+              <div style="background-color: #fff3cd; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #ffc107;">
+                <h3 style="color: #333; margin-top: 0; margin-bottom: 15px;">💬 Comentarios Adicionales</h3>
+                <p style="margin: 8px 0; font-style: italic;">${comment || 'Sin comentarios adicionales'}</p>
               </div>
               
-              <div style="background-color: #2c3e50; padding: 20px; border-radius: 5px; margin: 20px 0; text-align: center;">
-                <h3 style="color: white; margin-top: 0;">🔗 Enlace de Google Meet</h3>
-                <a href="${meetLink}" style="display: inline-block; background-color: white; color: #2c3e50; padding: 12px 24px; text-decoration: none; border-radius: 5px; font-weight: bold; font-size: 16px;">
-                  Unirse a la Reunión
-                </a>
-                <p style="color: white; margin: 15px 0 0 0; font-size: 14px;">
-                  Enlace: <a href="${meetLink}" style="color: white; text-decoration: underline;">${meetLink}</a>
+              <div style="background-color: #d1ecf1; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #0dcaf0;">
+                <h3 style="color: #333; margin-top: 0; margin-bottom: 15px;">🔗 Enlace de Google Meet</h3>
+                <div style="text-align: center; margin: 20px 0;">
+                  <a href="${meetLink}" style="background-color: #007bff; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold; display: inline-block;">
+                    Unirse a la Reunión
+                  </a>
+                </div>
+                <p style="margin: 8px 0; font-size: 14px; color: #6c757d;">
+                  <strong>Enlace:</strong> <a href="${meetLink}" style="color: #007bff; text-decoration: none;">${meetLink}</a>
                 </p>
               </div>
               
+              <div style="background-color: #f8f9fa; padding: 15px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #6c757d;">
+                <h4 style="color: #333; margin-top: 0; margin-bottom: 10px;">💳 Información del Pago</h4>
+                <p style="margin: 8px 0;"><strong>ID de pago:</strong> ${session.id}</p>
+                <p style="margin: 8px 0;"><strong>Estado:</strong> <span style="color: #28a745; font-weight: bold;">Confirmado</span></p>
+              </div>
+              
               <hr style="border: none; border-top: 1px solid #ddd; margin: 30px 0;">
-              <p style="color: #666; font-size: 12px; text-align: center;">
+              <p style="color: #666; font-size: 12px; text-align: center; margin: 0;">
                 Enviado desde el sistema de consultas de visas<br>
                 Fecha: ${new Date().toLocaleString('es-ES')}
               </p>
@@ -327,72 +373,36 @@ Fecha: ${new Date().toLocaleString('es-ES')}
           `,
           attachments: [
             {
-              filename: `consulta-visa-${name}-${selected_date || 'cita'}.ics`,
-              content: ownerIcsContent,
-              contentType: 'text/calendar; charset=utf-8'
-            }
-          ]
-        };
-
-        // Verificar si tenemos configuración real de email
-        const hasRealConfig = process.env.EMAIL_USER && 
-                             process.env.EMAIL_PASS && 
-                             process.env.EMAIL_PASS !== 'tu_app_password_aqui';
-
-        console.log("🔧 Configuración de email:", {
-          hasEmailUser: !!process.env.EMAIL_USER,
-          hasEmailPass: !!process.env.EMAIL_PASS,
-          hasRealConfig: hasRealConfig
+              filename: `consulta-visa-${name}-${selected_date}.ics`,
+              content: icsContent,
+              contentType: 'text/calendar; charset=utf-8; method=REQUEST',
+            },
+          ],
         });
 
-        if (!hasRealConfig) {
-          console.log("⚠️ No hay configuración real de email, solo logueando");
-          console.log("📧 Email que se habría enviado al owner:");
-          console.log("   Para:", ownerEmail);
-          console.log("   Asunto:", ownerSubject);
-          console.log("   Enlace Meet:", meetLink);
-          console.log("   Archivo .ics generado:", ownerIcsContent.substring(0, 200) + "...");
-        } else {
-          console.log("📧 Enviando email real al owner...");
-          // Enviar el email real al owner
-          const ownerResult = await transporter.sendMail(ownerMailOptions);
-          console.log("✅ Email de notificación al owner enviado exitosamente!");
-          console.log("📧 Message ID:", ownerResult.messageId);
-          console.log("📧 Response:", ownerResult.response);
-          console.log("🔗 Enlace de Google Meet generado:", meetLink);
-          console.log("📅 Archivo .ics generado y adjunto para el owner");
-        }
-        
+        console.log("✅ Email de notificación enviado al owner");
       } catch (emailError) {
-        console.error("❌ Error enviando email de notificación al owner:", emailError);
-        // No lanzamos el error para no afectar el webhook
+        console.error("❌ Error enviando email de notificación:", emailError);
       }
 
-      // Enviar email de invitación con archivo .ics (iCalendar) al cliente
+      // Enviar email de confirmación al cliente
       try {
-        console.log("📧 Enviando email de invitación con archivo .ics al cliente...");
+        // console.log("📧 Enviando email de confirmación al cliente...");
         
-        const { visa_type, name, email, phone, invitados, comment, selected_date, selected_time } = session.metadata || {};
+        const transporter = nodemailer.createTransport({
+          host: 'smtp.gmail.com',
+          port: 587,
+          secure: false,
+          auth: {
+            user: process.env.EMAIL_USER,
+            pass: process.env.EMAIL_PASS,
+          },
+        });
+
+        // Crear archivo .ics para el cliente
+        const clientEventUID = `${Date.now()}-${Math.random().toString(36).substring(2, 15)}-client@consultas-visa.com`;
         
-        // Usar el mismo enlace de Google Meet que se generó para el owner
-        // El meetLink ya está definido en la sección del owner arriba
-        
-        // Formatear la fecha y hora para el email
-        const appointmentDate = selected_date ? new Date(selected_date).toLocaleDateString('es-ES', {
-          weekday: 'long',
-          year: 'numeric',
-          month: 'long',
-          day: 'numeric'
-        }) : 'Fecha por confirmar';
-        
-        const appointmentTime = selected_time || 'Horario por confirmar';
-        
-        // Crear fecha y hora de inicio y fin del evento
-        const startDateTime = selected_date && selected_time ? 
-          new Date(`${selected_date}T${selected_time}:00`) : new Date();
-        const endDateTime = new Date(startDateTime.getTime() + 30 * 60000); // 30 minutos después
-        
-        // Formatear fechas para iCalendar con zona horaria
+        // Función helper para formatear fechas para iCalendar
         const formatDateForICS = (date: Date, useTimezone = false) => {
           if (useTimezone) {
             // Formato con zona horaria (Europe/Madrid)
@@ -409,203 +419,92 @@ Fecha: ${new Date().toLocaleString('es-ES')}
           }
         };
         
-        const startTimeFormatted = formatDateForICS(startDateTime, true);
-        const endTimeFormatted = formatDateForICS(endDateTime, true);
-        const nowFormatted = formatDateForICS(new Date());
-        
-        // Generar UID único para el evento
-        const eventUID = `${Date.now()}-${Math.random().toString(36).substring(2, 15)}@consultas-visa.com`;
-        
-        // Crear archivo .ics (iCalendar) mejorado
-        const eventTitle = `Consulta de Visa - ${visa_type?.toUpperCase()}`;
-        const eventDescription = `Consulta de visa para ${name}
-
-Tipo: ${visa_type?.toUpperCase()}
-Duración: 30 minutos
-Enlace de Google Meet: ${meetLink}
-
-Comentarios: ${comment || 'Sin comentarios adicionales'}
-
-¡Nos vemos en la consulta!`;
-
-        const icsContent = `BEGIN:VCALENDAR
-PRODID:-//Consultas Visa//Consulta de Visa//ES
+        const clientIcsContent = `BEGIN:VCALENDAR
 VERSION:2.0
+PRODID:-//Consultas Visa//Evento Cliente//ES
 CALSCALE:GREGORIAN
 METHOD:REQUEST
-BEGIN:VTIMEZONE
-TZID:Europe/Madrid
-X-LIC-LOCATION:Europe/Madrid
-BEGIN:DAYLIGHT
-TZOFFSETFROM:+0100
-TZOFFSETTO:+0200
-TZNAME:CEST
-DTSTART:19700329T020000
-RRULE:FREQ=YEARLY;BYMONTH=3;BYDAY=-1SU
-END:DAYLIGHT
-BEGIN:STANDARD
-TZOFFSETFROM:+0200
-TZOFFSETTO:+0100
-TZNAME:CET
-DTSTART:19701025T030000
-RRULE:FREQ=YEARLY;BYMONTH=10;BYDAY=-1SU
-END:STANDARD
-END:VTIMEZONE
 BEGIN:VEVENT
-DTSTART;TZID=Europe/Madrid:${startTimeFormatted}
-DTEND;TZID=Europe/Madrid:${endTimeFormatted}
-DTSTAMP:${nowFormatted}
-ORGANIZER;CN=Consultas Visa:mailto:${process.env.EMAIL_USER || 'lisandroxarenax@gmail.com'}
-UID:${eventUID}
-ATTENDEE;CUTYPE=INDIVIDUAL;ROLE=REQ-PARTICIPANT;PARTSTAT=NEEDS-ACTION;RSVP=TRUE;CN=${name}:mailto:${email}
-X-GOOGLE-CONFERENCE:${meetLink}
-CREATED:${nowFormatted}
-DESCRIPTION:${eventDescription.replace(/\n/g, '\\n')}
-LAST-MODIFIED:${nowFormatted}
+UID:${clientEventUID}
+DTSTAMP:${formatDateForICS(new Date())}
+DTSTART;TZID=Europe/Madrid:${formatDateForICS(startDateTime, true)}
+DTEND;TZID=Europe/Madrid:${formatDateForICS(endDateTime, true)}
+SUMMARY:Consulta de Visa - ${visa_type?.toUpperCase()}
+DESCRIPTION:Consulta de visa confirmada\\n\\nTipo: ${visa_type?.toUpperCase()}\\nDuración: 30 minutos\\n\\n¡Consulta confirmada!
 LOCATION:${meetLink}
-SEQUENCE:0
+URL:${meetLink}
 STATUS:CONFIRMED
-SUMMARY:${eventTitle}
-TRANSP:OPAQUE
+SEQUENCE:0
 BEGIN:VALARM
 TRIGGER:-PT15M
 ACTION:DISPLAY
-DESCRIPTION:Recordatorio: Consulta de Visa en 15 minutos
+DESCRIPTION:Recordatorio: Consulta de Visa
+END:VALARM
+BEGIN:VALARM
+TRIGGER:-PT1H
+ACTION:EMAIL
+DESCRIPTION:Recordatorio por email: Consulta de Visa
 END:VALARM
 END:VEVENT
 END:VCALENDAR`;
-        
-        // Configurar el email para el cliente
-        const clientEmail = email;
-        const clientSubject = `Cita confirmada: Consulta de Visa - ${appointmentDate} ${appointmentTime}`;
-        
-        const clientEmailBody = `
-¡Hola ${name}!
 
-Tu consulta de visa ha sido confirmada exitosamente.
-
-DETALLES DE LA CITA:
-- Tipo de consulta: ${visa_type?.toUpperCase()}
-- Fecha: ${appointmentDate}
-- Hora: ${appointmentTime}
-- Duración: 30 minutos
-
-ENLACE DE GOOGLE MEET:
-${meetLink}
-
-INSTRUCCIONES:
-1. El día de la cita, haz clic en el enlace de Google Meet
-2. Asegúrate de tener una buena conexión a internet
-3. Si tienes problemas técnicos, contacta al +34 123 456 789
-
-¡Esperamos verte pronto!
-
-Saludos,
-Equipo de Consultas de Visa
-        `.trim();
-
-        // Configurar Nodemailer para el cliente
-        const transporter = nodemailer.createTransport({
-          host: 'smtp.gmail.com',
-          port: 587,
-          secure: false,
-          auth: {
-            user: process.env.EMAIL_USER || 'lisandroxarenax@gmail.com',
-            pass: process.env.EMAIL_PASS || 'tu_app_password_aqui'
-          }
-        });
-
-        // Enviar email al cliente con archivo .ics adjunto
-        const clientMailOptions = {
-          from: process.env.EMAIL_USER || 'lisandroxarenax@gmail.com',
-          to: clientEmail,
-          subject: clientSubject,
-          text: clientEmailBody,
+        await transporter.sendMail({
+          from: process.env.EMAIL_USER || 'noreply@consultas-visa.com',
+          to: email,
+          subject: `Consulta de visa confirmada - ${selected_date} ${selected_time}`,
           html: `
-            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; background-color: #f8f9fa;">
-              <div style="background-color: #ffffff; padding: 30px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1);">
-                <div style="text-align: center; margin-bottom: 30px;">
-                  <h1 style="color: #2c3e50; margin: 0; font-size: 28px;">¡Cita Confirmada!</h1>
-                  <p style="color: #7f8c8d; margin: 10px 0 0 0; font-size: 16px;">Consulta de Visa</p>
-                </div>
-                
-                <div style="background-color: #ecf0f1; padding: 20px; border-radius: 8px; margin: 20px 0;">
-                  <h2 style="color: #2c3e50; margin-top: 0; font-size: 20px;">Detalles de la Cita</h2>
-                  <p style="margin: 8px 0; color: #34495e;"><strong>Tipo de consulta:</strong> ${visa_type?.toUpperCase()}</p>
-                  <p style="margin: 8px 0; color: #34495e;"><strong>Fecha:</strong> ${appointmentDate}</p>
-                  <p style="margin: 8px 0; color: #34495e;"><strong>Hora:</strong> ${appointmentTime}</p>
-                  <p style="margin: 8px 0; color: #34495e;"><strong>Duración:</strong> 30 minutos</p>
-                </div>
-                
-                
-                <div style="background-color: #2c3e50; padding: 25px; border-radius: 8px; margin: 25px 0; text-align: center;">
-                  <h3 style="color: white; margin: 0 0 15px 0; font-size: 18px;">🔗 Enlace de Google Meet</h3>
-                  <a href="${meetLink}" style="display: inline-block; background-color: white; color: #2c3e50; padding: 12px 24px; text-decoration: none; border-radius: 5px; font-weight: bold; font-size: 16px;">
-                    Unirse a la Reunión
-                  </a>
-                  <p style="color: white; margin: 15px 0 0 0; font-size: 14px;">
-                    Enlace: <a href="${meetLink}" style="color: white; text-decoration: underline;">${meetLink}</a>
-                  </p>
-                </div>
-                
-                <div style="background-color: #f39c12; padding: 20px; border-radius: 8px; margin: 20px 0;">
-                  <h3 style="color: white; margin: 0 0 15px 0; font-size: 16px;">📋 Instrucciones Importantes</h3>
-                  <ul style="color: white; margin: 0; padding-left: 20px;">
-                    <li style="margin: 5px 0;">El día de la cita, haz clic en el enlace de Google Meet</li>
-                    <li style="margin: 5px 0;">Asegúrate de tener una buena conexión a internet</li>
-                    <li style="margin: 5px 0;">Si tienes problemas técnicos, contacta al +34 123 456 789</li>
-                  </ul>
-                </div>
-                
-                <div style="text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid #ecf0f1;">
-                  <p style="color: #7f8c8d; margin: 0; font-size: 14px;">
-                    ¡Esperamos verte pronto!<br>
-                    <strong>Equipo de Consultas de Visa</strong>
-                  </p>
-                </div>
-              </div>
+            <h2>¡Consulta de visa confirmada!</h2>
+            <p>Hola ${name},</p>
+            <p>Tu consulta de visa ha sido confirmada exitosamente.</p>
+            <div style="background-color: #f0f9ff; padding: 20px; border-radius: 8px; margin: 20px 0;">
+              <h3>Detalles de tu consulta:</h3>
+              <p><strong>Tipo de visa:</strong> ${visa_type?.toUpperCase()}</p>
+              <p><strong>Fecha y hora:</strong> ${selected_date} a las ${selected_time}</p>
+              <p><strong>Duración:</strong> 30 minutos</p>
+              <p><strong>Precio pagado:</strong> €${price}</p>
+              ${invitados ? `<p><strong>Invitados:</strong> ${invitados}</p>` : ''}
             </div>
+            <div style="background-color: #ecfdf5; padding: 20px; border-radius: 8px; margin: 20px 0;">
+              <h3>🔗 Enlace de Google Meet:</h3>
+              <p><a href="${meetLink}" style="color: #059669; font-weight: bold; text-decoration: none;">${meetLink}</a></p>
+              <p style="font-size: 14px; color: #6b7280;">Haz clic en el enlace para unirte a la videollamada</p>
+            </div>
+            <div style="background-color: #fef3c7; padding: 15px; border-radius: 8px; margin: 20px 0;">
+              <h4>📝 Comentarios que proporcionaste:</h4>
+              <p style="font-style: italic;">${comment || 'Sin comentarios adicionales'}</p>
+            </div>
+            <div style="background-color: #f3f4f6; padding: 15px; border-radius: 8px; margin: 20px 0;">
+              <h4>ℹ️ Información importante:</h4>
+              <ul>
+                <li>El enlace de Google Meet estará disponible 5 minutos antes de la hora programada</li>
+                <li>Te recomendamos probar tu cámra y micrófono antes de la consulta</li>
+                <li>Si tienes algún problema técnico, contacta con nosotros</li>
+                <li>Recibirás un recordatorio por email 1 hora antes de la consulta</li>
+              </ul>
+            </div>
+            <p>¡Esperamos verte pronto!</p>
+            <p>Saludos,<br>El equipo de Consultas de Visa</p>
           `,
           attachments: [
             {
-              filename: `consulta-visa-${selected_date || 'cita'}.ics`,
-              content: icsContent,
-              contentType: 'text/calendar; charset=utf-8'
-            }
-          ]
-        };
+              filename: `consulta-visa-${selected_date}.ics`,
+              content: clientIcsContent,
+              contentType: 'text/calendar; charset=utf-8; method=REQUEST',
+            },
+          ],
+        });
 
-        // Verificar si tenemos configuración real de email
-        const hasRealConfig = process.env.EMAIL_USER && 
-                             process.env.EMAIL_PASS && 
-                             process.env.EMAIL_PASS !== 'tu_app_password_aqui';
-
-        if (!hasRealConfig) {
-          console.log("⚠️ No hay configuración real de email, solo logueando");
-          console.log("📧 Email de invitación que se habría enviado al cliente:");
-          console.log("   Para:", clientEmail);
-          console.log("   Asunto:", clientSubject);
-          console.log("   Enlace Meet:", meetLink);
-          console.log("   Archivo .ics generado:", icsContent.substring(0, 200) + "...");
-        } else {
-          console.log("📧 Enviando email de invitación real al cliente...");
-          // Enviar el email real al cliente
-          const clientResult = await transporter.sendMail(clientMailOptions);
-          console.log("✅ Email de invitación al cliente enviado exitosamente!");
-          console.log("📧 Message ID:", clientResult.messageId);
-          console.log("📧 Response:", clientResult.response);
-          console.log("🔗 Enlace de Google Meet generado:", meetLink);
-          console.log("📅 Archivo .ics generado y adjunto");
-        }
-        
+        console.log("✅ Email de confirmación enviado al cliente");
       } catch (emailError) {
-        console.error("❌ Error enviando email de invitación al cliente:", emailError);
-        // No lanzamos el error para no afectar el webhook
+        console.error("❌ Error enviando email de confirmación:", emailError);
       }
+
+      return NextResponse.json({ success: true });
     }
-  } catch (e) {
-    console.error("Error en webhook:", e);
-    return NextResponse.json({ received: true, error: true });
+
+    return NextResponse.json({ received: true });
+  } catch (error) {
+    console.error("❌ Error en webhook:", error);
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
-  return NextResponse.json({ received: true });
 }

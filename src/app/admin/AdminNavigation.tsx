@@ -69,9 +69,9 @@ export default function AdminNavigation() {
         {/* Menu Overlay - All Devices */}
         {isMobileMenuOpen && (
           <div className="fixed inset-0 z-50">
-            {/* Backdrop */}
+            {/* Backdrop with blur effect */}
             <div
-              className="fixed inset-0 bg-black bg-opacity-25"
+              className="fixed inset-0  bg-opacity-20 backdrop-blur-sm"
               onClick={() => setIsMobileMenuOpen(false)}
             />
             
@@ -80,7 +80,7 @@ export default function AdminNavigation() {
               <div className="flex flex-col h-full">
                 {/* Header */}
                 <div className="flex items-center justify-between p-4 border-b">
-                  <h2 className="text-lg font-semibold text-gray-900">Menú</h2>
+                  <h2 className="text-base sm:text-lg font-semibold text-gray-900">Menú</h2>
                   <button
                     onClick={() => setIsMobileMenuOpen(false)}
                     className="p-2 rounded-md text-gray-500 hover:text-gray-700 hover:bg-gray-100"
@@ -100,7 +100,7 @@ export default function AdminNavigation() {
                       </span>
                     </div>
                     <div>
-                      <p className="text-sm font-medium text-gray-900">
+                      <p className="text-xs sm:text-sm font-medium text-gray-900">
                         {user?.firstName || user?.emailAddresses[0]?.emailAddress}
                       </p>
                       <p className="text-xs text-gray-500">Administrador</p>
@@ -115,7 +115,7 @@ export default function AdminNavigation() {
                       <button
                         key={item.name}
                         onClick={() => navigateTo(item.href)}
-                        className="w-full flex items-center space-x-3 px-3 py-3 text-left text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
+                        className="w-full flex items-center space-x-3 px-3 py-3 text-left text-gray-700 hover:bg-gray-100 rounded-lg transition-colors text-sm sm:text-base"
                       >
                         <span className="text-lg">{item.icon}</span>
                         <span className="font-medium">{item.name}</span>
@@ -128,7 +128,7 @@ export default function AdminNavigation() {
                 <div className="p-4 border-t">
                   <button
                     onClick={handleLogout}
-                    className="w-full flex items-center space-x-3 px-3 py-3 text-left text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                    className="w-full flex items-center space-x-3 px-3 py-3 text-left text-red-600 hover:bg-red-50 rounded-lg transition-colors text-sm sm:text-base"
                   >
                     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
@@ -141,17 +141,7 @@ export default function AdminNavigation() {
           </div>
         )}
 
-        {/* User Info in Header - Always Visible */}
-        <div className="ml-4 flex items-center space-x-3">
-          <div className="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center">
-            <span className="text-white font-medium text-sm">
-              {user?.firstName?.charAt(0) || user?.emailAddresses[0]?.emailAddress?.charAt(0).toUpperCase()}
-            </span>
-          </div>
-          <span className="text-sm text-gray-700 hidden sm:block">
-            {user?.firstName || user?.emailAddresses[0]?.emailAddress}
-          </span>
-        </div>
+    
       </div>
     </>
   );

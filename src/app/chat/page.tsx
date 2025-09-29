@@ -1,9 +1,10 @@
 "use client";
 
 import { useEffect } from "react";
-import { ChatContainer, ConversationHeader, MessageList, Message, MessageInput, TypingIndicator } from "@chatscope/chat-ui-kit-react";
+import { ChatContainer, ConversationHeader, MessageList, Message, TypingIndicator } from "@chatscope/chat-ui-kit-react";
 import "@chatscope/chat-ui-kit-styles/dist/default/styles.min.css";
 import { useChatStore } from "./store";
+import CustomMessageInput from "./CustomMessageInput";
 
 // CSS para sobrescribir el fondo azul de ChatScope
 const customStyles = `
@@ -18,9 +19,8 @@ const customStyles = `
   }
 `;
 
-
 export default function ChatPage() {
-  const { messages, isBotTyping, sendUserMessage, ensureBootstrapped } = useChatStore();
+  const { messages, isBotTyping, sendUserMessage, ensureBootstrapped, mode } = useChatStore();
 
   useEffect(() => {
     ensureBootstrapped();
@@ -35,7 +35,7 @@ export default function ChatPage() {
             <ConversationHeader.Content 
               userName="Asesoría de Visas" 
               info="Chat de consulta" 
-              className="text-black font-semibold"
+              className="text-black font-semibold text-sm sm:text-base"
             />
           </ConversationHeader>
           <MessageList 
@@ -56,7 +56,7 @@ export default function ChatPage() {
                           : "bg-white text-black border-gray-300"
                       }`}>
                         <div className="pr-12">
-                          <span className="whitespace-pre-wrap" dangerouslySetInnerHTML={{ __html: m.text.replace(/&nbsp;/g, ' ') }} />
+                          <span className="whitespace-pre-wrap text-sm sm:text-base" dangerouslySetInnerHTML={{ __html: m.text.replace(/&nbsp;/g, ' ') }} />
                         </div>
                         <span className="absolute right-2 bottom-2 text-xs opacity-60 select-none whitespace-nowrap">{time}</span>
                       </div>
@@ -71,16 +71,15 @@ export default function ChatPage() {
               );
             })}
           </MessageList>
-          {/* Input visible solo en modo preguntas */}
-          {useChatStore.getState().mode === "asking" ? (
-            <MessageInput 
-              placeholder="Escribe tu respuesta..." 
-              attachButton={false} 
-              onSend={(text) => sendUserMessage(text)}
-              className="bg-white border-t border-gray-200 flex-shrink-0"
-            />
-          ) : null}
         </ChatContainer>
+        {/* Input fuera del ChatContainer para asegurar visibilidad - solo visible en modo asking */}
+        {mode === "asking" && (
+          <CustomMessageInput 
+            onSend={sendUserMessage}
+            disabled={isBotTyping}
+            placeholder="Escribe tu mensaje..."
+          />
+        )}
       </div>
     </div>
   );

@@ -27,7 +27,24 @@ export async function GET(request: Request) {
     const totalBookings = bookings?.length || 0;
     const confirmedBookings = bookings?.filter(b => b.status === "confirmed").length || 0;
     const conversionRate = totalBookings > 0 ? Math.round((confirmedBookings / totalBookings) * 100) : 0;
-    const averageBookingTime = 30; // Simulado - en producción calcular basado en datos reales
+    
+    // Calcular tiempo promedio basado en datos reales
+    let averageBookingTime = 0;
+    if (totalBookings > 0) {
+      // Obtener slots para calcular duración promedio
+      const { data: slots } = await supabase
+        .from("availability_slots")
+        .select("duration_minutes")
+        .in("id", bookings.map(b => b.slot_id).filter(Boolean));
+      
+      if (slots && slots.length > 0) {
+        const totalMinutes = slots.reduce((sum, slot) => sum + (slot.duration_minutes || 30), 0);
+        averageBookingTime = Math.round(totalMinutes / slots.length);
+      } else {
+        // Si no hay datos de slots, usar 30min por defecto
+        averageBookingTime = 30;
+      }
+    }
 
     // Agrupar por mes
     const bookingsByMonth = bookings?.reduce((acc: any, booking) => {
@@ -53,11 +70,14 @@ export async function GET(request: Request) {
       count: count as number
     }));
 
-    // Calcular ingresos por mes (€50 por consulta confirmada)
+    // Calcular ingresos por mes basado en datos reales
     const revenueByMonth = bookings?.reduce((acc: any, booking) => {
       if (booking.status === 'confirmed') {
         const month = new Date(booking.created_at).toLocaleDateString('es-ES', { month: 'short', year: 'numeric' });
-        acc[month] = (acc[month] || 0) + 50;
+        // Usar precio real del slot o €25 por defecto
+        const slot = slots?.find(s => s.id === booking.slot_id);
+        const price = slot?.price || 25; // Precio por defecto €25
+        acc[month] = (acc[month] || 0) + price;
       }
       return acc;
     }, {}) || {};
@@ -67,13 +87,19 @@ export async function GET(request: Request) {
       revenue: revenue as number
     }));
 
+    // Verificar si hay datos suficientes
+    const hasData = totalBookings > 0;
+    const noDataMessage = "Aún no hay datos suficientes para mostrar estadísticas";
+
     const analytics = {
       totalBookings,
-      bookingsByMonth: bookingsByMonthArray,
-      bookingsByVisaType: bookingsByVisaTypeArray,
-      revenueByMonth: revenueByMonthArray,
-      averageBookingTime,
-      conversionRate,
+      bookingsByMonth: hasData ? bookingsByMonthArray : [],
+      bookingsByVisaType: hasData ? bookingsByVisaTypeArray : [],
+      revenueByMonth: hasData ? revenueByMonthArray : [],
+      averageBookingTime: hasData ? averageBookingTime : 0,
+      conversionRate: hasData ? conversionRate : 0,
+      hasData,
+      noDataMessage: !hasData ? noDataMessage : null,
     };
 
     return NextResponse.json(analytics);
@@ -82,4 +108,8 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "Error interno del servidor" }, { status: 500 });
   }
 }
+
+
+
+
 

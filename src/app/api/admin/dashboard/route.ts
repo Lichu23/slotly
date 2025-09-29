@@ -34,8 +34,21 @@ export async function GET() {
     const confirmedBookings = bookings?.filter(b => b.status === "confirmed").length || 0;
     const cancelledBookings = bookings?.filter(b => b.status === "cancelled").length || 0;
     
-    // Calcular ingresos (asumiendo €50 por consulta)
-    const totalRevenue = confirmedBookings * 50;
+    // Calcular ingresos basado en datos reales
+    const totalRevenue = bookings?.reduce((total, booking) => {
+      if (booking.status === "confirmed") {
+        // Obtener precio del slot o usar precio por defecto basado en duración
+        const slot = slots?.find(s => s.id === booking.slot_id);
+        if (slot) {
+          // Si el slot tiene información de precio, usarla
+          return total + (slot.price || 25); // Precio por defecto €25
+        }
+        // Si no hay slot, usar precio por defecto basado en tipo de visa
+        const defaultPrice = booking.visa_type === "general" ? 25 : 25; // Todos los tipos cuestan €25
+        return total + defaultPrice;
+      }
+      return total;
+    }, 0) || 0;
     
     const availableSlots = slots?.filter(s => s.is_available).length || 0;
     const bookedSlots = slots?.filter(s => !s.is_available).length || 0;
@@ -62,4 +75,8 @@ export async function GET() {
     return NextResponse.json({ error: "Error interno del servidor" }, { status: 500 });
   }
 }
+
+
+
+
 

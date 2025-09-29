@@ -23,10 +23,12 @@ export async function POST(req: Request) {
       .single();
 
     if (slotError || !slot) {
+      console.error('❌ Slot not found:', slotError);
       return NextResponse.json({ error: "Slot not found" }, { status: 404 });
     }
 
     if (slot.current_bookings >= slot.max_bookings) {
+      console.log(`❌ Slot ${slotId} ya está lleno: ${slot.current_bookings}/${slot.max_bookings}`);
       return NextResponse.json({ error: "Slot is no longer available" }, { status: 409 });
     }
 
@@ -50,6 +52,8 @@ export async function POST(req: Request) {
     }
 
     // Actualizar contador de bookings en el slot
+    console.log(`📝 AVAILABILITY_SLOTS UPDATE - Slot ${slotId}: ${slot.current_bookings} -> ${slot.current_bookings + 1} bookings`);
+    
     const { error: updateError } = await supabase
       .from('availability_slots')
       .update({ 
@@ -59,11 +63,13 @@ export async function POST(req: Request) {
       .eq('id', slotId);
 
     if (updateError) {
-      console.error('Error updating slot:', updateError);
+      console.error('❌ AVAILABILITY_SLOTS UPDATE ERROR:', updateError);
       // Rollback del booking si falla la actualización
       await supabase.from('bookings').delete().eq('id', booking.id);
       return NextResponse.json({ error: "Failed to update slot" }, { status: 500 });
     }
+
+    console.log(`✅ AVAILABILITY_SLOTS UPDATE SUCCESS - Slot ${slotId} actualizado exitosamente`);
 
     return NextResponse.json({ 
       success: true, 

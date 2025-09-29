@@ -28,12 +28,13 @@ type ChatState = {
   selectedPrice: number;
   selectedDate: string | null;
   selectedTime: string | null;
+  selectedSlotId: string | null;
   ensureBootstrapped: () => void;
   sendUserMessage: (text: string) => void;
   selectVisa: (visa: Exclude<VisaType, null>) => void;
   selectGeneralConsultation: () => void;
   selectDuration: (duration: number, price: number) => void;
-  selectDateAndTime: (dateISO: string, time: string) => void;
+  selectDateAndTime: (dateISO: string, time: string, slotId?: string) => void;
   backToCalendar: () => void;
   getConversationSummary: () => string;
   getAISummary: () => Promise<string>;
@@ -140,12 +141,6 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
   selectDuration: (duration, price) => {
     set({ selectedDuration: duration, selectedPrice: price, mode: "calendar" });
-    const confirmation: ChatMessage = {
-      id: `duration-${duration}`,
-      role: "bot",
-      text: `Excelente. Consulta de ${duration} minutos por €${price}. Ahora elige una fecha:`,
-      createdAt: Date.now(),
-    };
     const calendarMsg: ChatMessage = {
       id: `cal-${Date.now()}`,
       role: "bot",
@@ -153,22 +148,67 @@ export const useChatStore = create<ChatState>((set, get) => ({
       render: <CustomTimeSlotsMessage onPick={(d, t) => get().selectDateAndTime(d, t)} />,
       createdAt: Date.now(),
     };
-    set((s) => ({ messages: [...s.messages, confirmation, calendarMsg] }));
+    set((s) => ({ messages: [...s.messages, calendarMsg] }));
+    
+    // Scroll automático más robusto después de agregar el mensaje
+    const performScroll = () => {
+      // Intentar encontrar el contenedor de mensajes
+      const messageList = document.querySelector('[data-testid="message-list"]') || 
+                         document.querySelector('.cs-message-list') ||
+                         document.querySelector('.overflow-y-auto') ||
+                         document.querySelector('[class*="overflow-y-auto"]') ||
+                         document.querySelector('.flex-1.overflow-y-auto');
+      
+      if (messageList) {
+        // Scroll al final del contenedor
+        messageList.scrollTo({
+          top: messageList.scrollHeight,
+          behavior: 'smooth'
+        });
+      } else {
+        // Fallback: scroll de la ventana
+        window.scrollTo({
+          top: document.body.scrollHeight,
+          behavior: 'smooth'
+        });
+      }
+    };
+
+    // Intentar scroll múltiples veces con diferentes delays
+    setTimeout(performScroll, 100);
+    setTimeout(performScroll, 300);
+    setTimeout(performScroll, 600);
+    setTimeout(performScroll, 1000);
+    
+    // Intentar scroll específico al calendario cuando esté disponible
+    setTimeout(() => {
+      const calendarElement = document.getElementById('calendar-component') ||
+                             document.querySelector('[class*="bg-white rounded-lg shadow-lg"]') ||
+                             document.querySelector('.bg-white.rounded-lg.shadow-lg');
+      
+      if (calendarElement) {
+        calendarElement.scrollIntoView({ 
+          behavior: 'smooth', 
+          block: 'start',
+          inline: 'nearest'
+        });
+      }
+    }, 800);
   },
 
-  selectDateAndTime: (dateISO: string, time: string) => {
-    set({ mode: "form", selectedDate: dateISO, selectedTime: time });
-    const info: ChatMessage = {
-      id: `datetime-${Date.now()}`,
-      role: "bot",
-      text: `Cita seleccionada: ${new Date(dateISO).toLocaleDateString('es-ES')} a las ${time}. Completa el formulario para finalizar.`,
-      createdAt: Date.now(),
-    };
-    const visa = get().selectedVisa as Exclude<VisaType, null>;
-    const { selectedPrice } = get();
-    (async () => {
-      const form: ChatMessage = {
-        id: `form-${visa}-${Date.now()}`,
+  selectDateAndTime: (dateISO: string, time: string, slotId?: string) => {
+    set({ mode: "form", selectedDate: dateISO, selectedTime: time, selectedSlotId: slotId || null });
+    
+    const currentMessages = get().messages;
+    const existingFormIndex = currentMessages.findIndex(m => m.id.startsWith('form-'));
+    
+    if (existingFormIndex !== -1) {
+      // Si ya existe un formulario, actualizarlo en lugar de crear uno nuevo
+      const visa = get().selectedVisa as Exclude<VisaType, null>;
+      const { selectedPrice } = get();
+      
+      const updatedForm: ChatMessage = {
+        id: currentMessages[existingFormIndex].id, // Mantener el mismo ID
         role: "bot",
         text: "",
         render: <FormMessage 
@@ -177,11 +217,46 @@ export const useChatStore = create<ChatState>((set, get) => ({
           customPrice={selectedPrice}
           selectedDate={dateISO}
           selectedTime={time}
+          selectedSlotId={slotId}
         />,
+        createdAt: currentMessages[existingFormIndex].createdAt, // Mantener la fecha original
+      };
+      
+      // Actualizar el mensaje del formulario existente
+      const updatedMessages = [...currentMessages];
+      updatedMessages[existingFormIndex] = updatedForm;
+      set({ messages: updatedMessages });
+      
+      // Agregar mensaje de actualización
+      const updateInfo: ChatMessage = {
+        id: `datetime-update-${Date.now()}`,
+        role: "bot",
+        text: `📅 Fecha actualizada: ${new Date(dateISO).toLocaleDateString('es-ES')} a las ${time}`,
         createdAt: Date.now(),
       };
-      set((s) => ({ messages: [...s.messages, info, form] }));
-    })();
+      set((s) => ({ messages: [...s.messages, updateInfo] }));
+    } else {
+      // Si no existe formulario, crear uno nuevo
+      const visa = get().selectedVisa as Exclude<VisaType, null>;
+      const { selectedPrice } = get();
+      (async () => {
+        const form: ChatMessage = {
+          id: `form-${visa}-${Date.now()}`,
+          role: "bot",
+          text: "",
+          render: <FormMessage 
+            visaType={visa} 
+            presetComment="" 
+            customPrice={selectedPrice}
+            selectedDate={dateISO}
+            selectedTime={time}
+            selectedSlotId={slotId}
+          />,
+          createdAt: Date.now(),
+        };
+        set((s) => ({ messages: [...s.messages, form] }));
+      })();
+    }
   },
 
   backToCalendar: () => {

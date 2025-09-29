@@ -102,10 +102,10 @@ export default function AdminBookings() {
       {/* Header */}
       <div className="bg-white shadow">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center py-6">
+          <div className="flex justify-between items-center py-4 sm:py-6">
             <div>
-              <h1 className="text-3xl font-bold text-gray-900">Gestión de Reservas</h1>
-              <p className="text-gray-600">Administra todas las reservas del sistema</p>
+              <h1 className="text-xl lg:text-3xl font-bold text-gray-900">Gestión de Reservas</h1>
+              <p className="text-gray-600 text-sm sm:text-base">Administra todas las reservas del sistema</p>
             </div>
             <AdminNavigation />
           </div>
@@ -113,8 +113,8 @@ export default function AdminBookings() {
       </div>
 
       {/* Filters */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-        <div className="bg-white rounded-lg shadow p-6">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-6">
+        <div className="bg-white rounded-lg shadow p-4 sm:p-6">
           <div className="flex flex-col sm:flex-row gap-4">
             <div className="flex-1">
               <input
@@ -122,14 +122,14 @@ export default function AdminBookings() {
                 placeholder="Buscar por nombre o email..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-black focus:border-black"
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-black focus:border-black text-sm sm:text-base"
               />
             </div>
             <div>
               <select
                 value={filter}
                 onChange={(e) => setFilter(e.target.value)}
-                className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-black focus:border-black"
+                className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-black focus:border-black text-sm sm:text-base"
               >
                 <option value="all">Todos los estados</option>
                 <option value="pending">Pendientes</option>
@@ -139,7 +139,7 @@ export default function AdminBookings() {
             </div>
             <button
               onClick={loadBookings}
-              className="px-4 py-2 bg-black text-white rounded-md hover:bg-gray-800 transition-colors"
+              className="px-4 py-2 bg-black text-white rounded-md hover:bg-gray-800 transition-colors text-sm sm:text-base"
             >
               Actualizar
             </button>
@@ -148,34 +148,34 @@ export default function AdminBookings() {
       </div>
 
       {/* Bookings Table */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-8">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-4 sm:pb-8">
         <div className="bg-white rounded-lg shadow overflow-hidden">
           {isLoading ? (
             <div className="p-8 text-center">
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-black mx-auto"></div>
-              <p className="mt-2 text-gray-600">Cargando reservas...</p>
+              <p className="mt-2 text-gray-600 text-sm sm:text-base">Cargando reservas...</p>
             </div>
           ) : (
             <div className="overflow-x-auto">
               <table className="min-w-full divide-y divide-gray-200">
                 <thead className="bg-gray-50">
                   <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-3 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Cliente
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-3 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Contacto
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-3 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Tipo de Visa
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-3 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Estado
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-3 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Fecha
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-3 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Acciones
                     </th>
                   </tr>
@@ -183,19 +183,19 @@ export default function AdminBookings() {
                 <tbody className="bg-white divide-y divide-gray-200">
                   {filteredBookings.map((booking) => (
                     <tr key={booking.id}>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm font-medium text-gray-900">
+                      <td className="px-3 sm:px-6 py-4 whitespace-nowrap">
+                        <div className="text-xs sm:text-sm font-medium text-gray-900">
                           {booking.customer_name}
                         </div>
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm text-gray-900">{booking.customer_email}</div>
-                        <div className="text-sm text-gray-500">{booking.customer_phone}</div>
+                      <td className="px-3 sm:px-6 py-4 whitespace-nowrap">
+                        <div className="text-xs sm:text-sm text-gray-900">{booking.customer_email}</div>
+                        <div className="text-xs sm:text-sm text-gray-500">{booking.customer_phone}</div>
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-xs sm:text-sm text-gray-500">
                         {booking.visa_type}
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
+                      <td className="px-3 sm:px-6 py-4 whitespace-nowrap">
                         <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
                           booking.status === 'confirmed' 
                             ? 'bg-green-100 text-green-800'
@@ -206,22 +206,22 @@ export default function AdminBookings() {
                           {booking.status}
                         </span>
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-xs sm:text-sm text-gray-500">
                         {new Date(booking.created_at).toLocaleDateString()}
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                        <div className="flex space-x-2">
+                      <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-xs sm:text-sm font-medium">
+                        <div className="flex flex-col sm:flex-row space-y-1 sm:space-y-0 sm:space-x-2">
                           {booking.status === 'pending' && (
                             <>
                               <button
                                 onClick={() => updateBookingStatus(booking.id, 'confirmed')}
-                                className="text-green-600 hover:text-green-900"
+                                className="text-green-600 hover:text-green-900 text-xs sm:text-sm"
                               >
                                 Confirmar
                               </button>
                               <button
                                 onClick={() => updateBookingStatus(booking.id, 'cancelled')}
-                                className="text-red-600 hover:text-red-900"
+                                className="text-red-600 hover:text-red-900 text-xs sm:text-sm"
                               >
                                 Cancelar
                               </button>
@@ -230,7 +230,7 @@ export default function AdminBookings() {
                           {booking.status === 'confirmed' && (
                             <button
                               onClick={() => updateBookingStatus(booking.id, 'cancelled')}
-                              className="text-red-600 hover:text-red-900"
+                              className="text-red-600 hover:text-red-900 text-xs sm:text-sm"
                             >
                               Cancelar
                             </button>
@@ -238,7 +238,7 @@ export default function AdminBookings() {
                           {booking.status === 'cancelled' && (
                             <button
                               onClick={() => updateBookingStatus(booking.id, 'pending')}
-                              className="text-yellow-600 hover:text-yellow-900"
+                              className="text-yellow-600 hover:text-yellow-900 text-xs sm:text-sm"
                             >
                               Reactivar
                             </button>
@@ -249,7 +249,7 @@ export default function AdminBookings() {
                   ))}
                   {filteredBookings.length === 0 && (
                     <tr>
-                      <td colSpan={6} className="px-6 py-4 text-center text-gray-500">
+                      <td colSpan={6} className="px-3 sm:px-6 py-4 text-center text-gray-500 text-sm sm:text-base">
                         No se encontraron reservas
                       </td>
                     </tr>
