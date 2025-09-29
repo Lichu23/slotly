@@ -78,7 +78,8 @@ export function FormMessage({
                 email: data.email,
                 phone: data.phone
               },
-              visaType: visaType
+              visaType: visaType,
+              price: priceCents / 100 // Convertir de centavos a euros
             })
           });
 

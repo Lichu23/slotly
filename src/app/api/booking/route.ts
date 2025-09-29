@@ -3,7 +3,7 @@ import { supabase } from "@/lib/supabase";
 
 export async function POST(req: Request) {
   try {
-    const { slotId, customerData, visaType } = await req.json();
+    const { slotId, customerData, visaType, price } = await req.json();
     
     if (!slotId || !customerData || !visaType) {
       return NextResponse.json({ 
@@ -41,6 +41,7 @@ export async function POST(req: Request) {
         customer_email: customerData.email,
         customer_phone: customerData.phone,
         visa_type: visaType,
+        price: price || null, // Guardar precio si está disponible
         status: 'pending'
       })
       .select()

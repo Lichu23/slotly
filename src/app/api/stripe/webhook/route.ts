@@ -69,6 +69,7 @@ export async function POST(request: Request) {
               .update({
                 status: 'confirmed',
                 payment_id: session.id,
+                price: session.amount_total ? session.amount_total / 100 : null, // Precio real pagado en euros
                 updated_at: new Date().toISOString()
               })
               .eq('id', existingBooking.id)
@@ -106,6 +107,7 @@ export async function POST(request: Request) {
                 customer_email: session.metadata.email,
                 customer_phone: session.metadata.phone,
                 visa_type: session.metadata.visa_type,
+                price: session.amount_total ? session.amount_total / 100 : null, // Precio real pagado en euros
                 status: 'confirmed',
                 payment_id: session.id
               })

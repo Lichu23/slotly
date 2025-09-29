@@ -17,6 +17,19 @@ const customStyles = `
   .cs-message--outgoing .cs-message__content {
     background: transparent !important;
   }
+  .cs-typing-indicator {
+    color: black !important;
+  }
+  .cs-typing-indicator__text {
+    color: black !important;
+  }
+  .cs-typing-indicator__dots {
+    color: black !important;
+  }
+  .cs-typing-indicator__dot {
+    color: black !important;
+    background-color: black !important;
+  }
 `;
 
 export default function ChatPage() {
